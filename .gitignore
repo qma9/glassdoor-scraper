@@ -1,3 +1,6 @@
+# pycache
+backend/__pycache__
+
 # Environment variables
 .env
 
@@ -18,3 +21,6 @@ scraper/scrap.py
 
 # TODO list
 todo.md
+
+# Unique_companies
+unique_companies.py

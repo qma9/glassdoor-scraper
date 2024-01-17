@@ -20,7 +20,7 @@ from base_models import CompanyBase
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv()
 
-from utils import get_db, configure_logging
+from utils import get_db, configure_logging, get_unique_companies
 
 # Configure logging
 configure_logging()
@@ -118,11 +118,14 @@ def find_all_companies(
     return {"message": "Scraping complete, company id and name added to the database"}
 
 
-# Load company names DataFrame
-df = pd.read_csv("scraper/data/compustat_glassdoor_matches.csv")
+# Load companies
+df = pd.read_csv("scraper/data/compustat_bgt_matches.csv")
+
+# Keep the observation with the lowest tier for each gvkey
+df_unique = get_unique_companies(df)
 
 # Convert query column to a list
-companies = df["query"].tolist()
+companies = df_unique["employer"].tolist()
 
 
 if __name__ == "__main__":

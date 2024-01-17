@@ -1,15 +1,8 @@
+import pandas as pd
+
 import os
 import json
 import logging
-
-
-def load_auth():
-    """
-    Load authentication credentials from auth.json
-    """
-    FILE = os.path.join("scraper", "auth.json")
-    with open(FILE, "r") as f:
-        return json.load(f)
 
 
 def get_db():
@@ -33,4 +26,13 @@ def configure_logging():
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler(), logging.FileHandler("logfile.log")],
+    )
+
+
+def get_unique_companies(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Keep the observation with the lowest tier for each gvkey
+    """
+    return df.sort_values(["gvkey", "tier"], ascending=True).drop_duplicates(
+        subset="gvkey", keep="first"
     )
