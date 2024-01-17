@@ -7,7 +7,7 @@ import logging
 
 def get_db():
     """
-    Instatiate database session
+    Get a database session.
     """
     from database import SessionLocal
 
@@ -20,7 +20,10 @@ def get_db():
 
 def configure_logging():
     """
-    Configure logging
+    Sets up the logging configuration for the application.
+    It configures the logging level to INFO, sets the log message format,
+    and adds two handlers: a StreamHandler to log messages to the console,
+    and a FileHandler to log messages to a file named "logfile.log".
     """
     logging.basicConfig(
         level=logging.INFO,
@@ -31,7 +34,7 @@ def configure_logging():
 
 def get_unique_companies(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Keep the observation with the lowest tier for each gvkey
+    Keep the observation with the lowest tier for each gvkey.
     """
     return df.sort_values(["gvkey", "tier"], ascending=True).drop_duplicates(
         subset="gvkey", keep="first"

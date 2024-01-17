@@ -46,7 +46,13 @@ db_dependency = Annotated[Session, Depends(get_db)]
 
 async def find_company(query: str) -> Dict[int, str]:
     """
-    Find company Glassdoor ID and name by query. e.g. "ebay" will return "eBay" with ID 7853
+    Find company Glassdoor ID and name by query. e.g. "ebay" will return "eBay" with ID 7853.
+
+    Args:
+        query (str): The query string to search for a company.
+
+    Returns:
+        Dict[int, str]: A dictionary containing the Glassdoor ID and name of the company.
     """
     async with async_playwright() as pw:
         browser = await pw.chromium.connect_over_cdp(browser_url)
@@ -77,9 +83,19 @@ async def find_company(query: str) -> Dict[int, str]:
     }
 
 
-async def add_company_to_db(company_name: str, db: Session):
+async def add_company_to_db(company_name: str, db: Session) -> None:
     """
-    Add company_id and company_name to company table
+    Add company_id and company_name to company table.
+
+    Args:
+        company_name (str): The name of the company to add to the database.
+        db (Session): The database session.
+
+    Raises:
+        HTTPException: If the data for the company is invalid.
+
+    Returns:
+        None
     """
     company_data = await find_company(company_name)
 
@@ -100,7 +116,18 @@ async def add_company_to_db(company_name: str, db: Session):
 @app.post("/companies/")
 def find_all_companies(
     background_tasks: BackgroundTasks, companies: List[str], db: Session = db_dependency
-):
+) -> Dict[str, str]:
+    """
+    Endpoint to scrape company ids and names on Glassdoor and add them to company table.
+
+    Args:
+        background_tasks (BackgroundTasks): BackgroundTasks object to handle asynchronous tasks.
+        companies (List[str]): List of company names to be added to the database.
+        db (Session, optional): Database session object. Defaults to db_dependency.
+
+    Returns:
+        dict: A dictionary with a message indicating the completion of scraping and addition of company details to the database.
+    """
     for company in companies:
         try:
             background_tasks.add_task(add_company_to_db, company, db)
@@ -119,7 +146,7 @@ def find_all_companies(
 
 
 # Load companies
-df = pd.read_csv("scraper/data/compustat_bgt_matches.csv")
+df = pd.read_csv(os.getenv("COMPANY_NAMES"))
 
 # Keep the observation with the lowest tier for each gvkey
 df_unique = get_unique_companies(df)
@@ -137,6 +164,3 @@ if __name__ == "__main__":
 
     # Print the response
     print(response.json())
-
-    # Testing find company
-    # print(asyncio.run(find_company("google")))

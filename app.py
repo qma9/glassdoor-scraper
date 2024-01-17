@@ -23,7 +23,6 @@ app = FastAPI()
 db_dependency = Annotated[Session, Depends(get_db)]
 
 
-# Route to scrape Glassdoor overview and reviews
 @app.post("/glassdoor/")
 def scrape(db: Session = db_dependency):
     """
@@ -55,7 +54,7 @@ if __name__ == "__main__":
     # Create a TestClient instance
     client = TestClient(app)
 
-    # Test the endpoint
+    # Run the endpoint
     response = client.post("/glassdoor/")
 
     # Print the response

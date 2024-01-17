@@ -16,12 +16,24 @@ configure_logging()
 
 def main(db: Session) -> None:
     """
-    Scrape Glassdoor reviews for eBay Motors Group
+    Scrape Glassdoor reviews.
+
+    Args:
+        db (Session): The database session object
+
+    Returns:
+        None
     """
 
     def get_all_companies(db: Session) -> List[Tuple[int, str]]:
         """
-        Get all companie id and names from the database
+        Get all companie id and names from the database.
+
+        Args:
+            db (Session): The database session object
+
+        Returns:
+            List[Tuple[int, str]]: A list of tuples containing company id and names
         """
         return db.query(Company.employer_name, Company.employer_id).all()
 

@@ -34,8 +34,15 @@ browser_url = f'wss://{auth}@{cred["host"]}'
 
 def find_hidden_data(result: str) -> dict:
     """
-    Extract hidden web cache (Apollo Graphql framework) from Glassdoor page HTML
-    It's either in NEXT_DATA script or direct apolloState js variable
+    Extract hidden web cache (Apollo Graphql) from Glassdoor page HTML.
+    It's either in NEXT_DATA script or direct apolloState js variable.
+
+    Args:
+        result (str): The HTML content of the Glassdoor page.
+
+    Returns:
+        dict: The extracted hidden web cache data.
+
     """
     # Create a BeautifulSoup object from the response text
     soup = BeautifulSoup(result, "html.parser")
@@ -70,7 +77,14 @@ def find_hidden_data(result: str) -> dict:
 
 def parse_overview(result: str) -> Dict[str, str | int]:
     """
-    Parse overview from Glassdoor page HTML
+    Parse overview from Glassdoor page HTML.
+
+    Args:
+        result (str): The HTML content of the Glassdoor page.
+
+    Returns:
+        Dict[str, str | int]: A dictionary containing the parsed overview data.
+
     """
     cache = find_hidden_data(result)
     root_query = cache.get("ROOT_QUERY", {})
@@ -124,7 +138,16 @@ def parse_overview(result: str) -> Dict[str, str | int]:
 
 def parse_reviews(result: str) -> Dict[str, Dict[str, str | int]]:
     """
-    Parse data from Glassdoor page HTML
+    Parse data from Glassdoor page HTML.
+
+    Args:
+        result (str): The HTML content of the Glassdoor page.
+
+    Returns:
+        Dict[str, Dict[str, str | int]]: A dictionary containing parsed review data.
+            The keys are review IDs and the values are dictionaries containing
+            various attributes of the review, such as review ID, employer ID,
+            date and time, ratings, job details, location, pros and cons, etc.
     """
     cache = find_hidden_data(result)
     root_query = cache.get("ROOT_QUERY", {})
@@ -213,7 +236,16 @@ def parse_reviews(result: str) -> Dict[str, Dict[str, str | int]]:
 async def scrape_data(
     url: str, max_pages: Optional[int] = None
 ) -> Tuple[Dict[str, int | float], Dict[str, Dict[str, str | int]]]:
-    """Scrape Glassdoor reviews listings from reviews page (with pagination)"""
+    """Scrape Glassdoor reviews listings from reviews pages (with pagination).
+
+    Args:
+        url (str): The URL of the reviews page to scrape.
+        max_pages (Optional[int], optional): The maximum number of pages to scrape. Defaults to None.
+
+    Returns:
+        Tuple[Dict[str, int | float], Dict[str, Dict[str, str | int]]]: A tuple containing the overview information and the scraped reviews.
+
+    """
     logging.info("scraping reviews from %s", url)
 
     async with async_playwright() as pw:
@@ -267,7 +299,9 @@ async def scrape_data(
 
 
 class Region(Enum):
-    """glassdoor.com region codes"""
+    """
+    Glassdoor region ids.
+    """
 
     UNITED_STATES = "1"
     UNITED_KINGDOM = "2"
@@ -296,26 +330,35 @@ class Region(Enum):
 
 class Url:
     """
-    Helper URL generator that generates full URLs for glassdoor.com pages
-    from given employer name and ID
+    Helper URL generator for glassdoor.com pages from given employer name and id.
+
     For example:
-    > GlassdoorUrl.overview("eBay Motors Group", "4189745")
+    GlassdoorUrl.overview("eBay Motors Group", "4189745")
     https://www.glassdoor.com/Overview/Working-at-eBay-Motors-Group-EI_IE4189745.11,28.htm
 
-    Note that URL formatting is important when it comes to scraping Glassdoor
-    as unusual URL formats can lead to scraper blocking.
+    Glassdoor allows any prefix for employer name and to indicate the prefix suffix numbers are used like:
+    https://www.glassdoor.com/Overview/Working-at-eBay-Motors-Group-EI_IE4189745.11,28.htm
+    11,28 is the slice where employer name is
     """
 
     @staticmethod
     def overview(
         employer: str, employer_id: str, region: Optional[Region] = None
     ) -> str:
+        """
+        Generate the URL for the overview page of a specific employer on Glassdoor.
+
+        Args:
+            employer (str): The name of the employer.
+            employer_id (str): The ID of the employer.
+            region (Optional[Region], optional): The region to filter the results by. Defaults to None.
+
+        Returns:
+            str: The generated URL.
+
+        """
         employer = employer.replace(" ", "-")
         url = f"https://www.glassdoor.com/Overview/Working-at-{employer}-EI_IE{employer_id}"
-        # glassdoor is allowing any prefix for employer name and
-        # to indicate the prefix suffix numbers are used like:
-        # https://www.glassdoor.com/Overview/Working-at-eBay-Motors-Group-EI_IE4189745.11,28.htm
-        # 11,28 is the slice where employer name is
         _start = url.split("/Overview/")[1].find(employer)
         _end = _start + len(employer)
         url += f".{_start},{_end}.htm"
@@ -327,6 +370,18 @@ class Url:
     def reviews(
         employer: str, employer_id: str, regions: Optional[List[Region]] = None
     ) -> str:
+        """
+        Generate the URL for the reviews page of a specific employer on Glassdoor.
+
+        Args:
+            employer (str): The name of the employer.
+            employer_id (str): The ID of the employer.
+            regions (Optional[List[Region]], optional): The regions to filter the results by. Defaults to None.
+
+        Returns:
+            str: The generated URL.
+
+        """
         employer = employer.replace(" ", "-")
         url = (
             f"https://www.glassdoor.com/Reviews/{employer}-Reviews-E{employer_id}.htm?"
@@ -337,7 +392,17 @@ class Url:
 
     @staticmethod
     def change_page(url: str, page: int) -> str:
-        """update page number in a glassdoor url"""
+        """
+        Update the page number in a Glassdoor URL.
+
+        Args:
+            url (str): The original URL.
+            page (int): The new page number.
+
+        Returns:
+            str: The updated URL.
+
+        """
         if re.search(r"_P\d+\.htm", url):
             new = re.sub(r"(?:_P\d+)*.htm", f"_P{page}.htm", url)
         else:

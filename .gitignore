@@ -15,7 +15,7 @@ scraper/data
 logfile.log
 
 # Testing commands
-test/test_commands.py
+test/test_commands.sh
 
 # Scrap code
 scraper/scrap.py
