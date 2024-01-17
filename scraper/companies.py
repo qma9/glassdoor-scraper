@@ -1,0 +1,139 @@
+from playwright.async_api import async_playwright
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+import pandas as pd
+
+from typing import Dict, Annotated, List
+import json
+import logging
+import asyncio
+from dotenv import load_dotenv
+import os
+import sys
+
+from database import engine
+from models import Company
+from base_models import CompanyBase
+
+# Load .env file
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv()
+
+from utils import get_db, configure_logging
+
+# Configure logging
+configure_logging()
+
+# Create the Company table
+Company.__table__.create(bind=engine)
+
+# Create the FastAPI instance
+app = FastAPI()
+
+# Bright Data headless browser authentication credentials
+cred = {
+    "host": os.getenv("HOST"),
+    "username": os.getenv("USERNAME"),
+    "password": os.getenv("PASSWORD"),
+}
+auth = f'{cred["username"]}:{cred["password"]}'
+browser_url = f'wss://{auth}@{cred["host"]}'
+
+# Database dependency
+db_dependency = Annotated[Session, Depends(get_db)]
+
+
+async def find_company(query: str) -> Dict[int, str]:
+    """
+    Find company Glassdoor ID and name by query. e.g. "ebay" will return "eBay" with ID 7853
+    """
+    async with async_playwright() as pw:
+        browser = await pw.chromium.connect_over_cdp(browser_url)
+        page = await browser.new_page()
+
+        # Abort unnecessary requests
+        await page.route(
+            "**/*",
+            lambda route, request: route.continue_()
+            if request.resource_type == "document"
+            else route.abort(),
+        )
+        # Navigate to the search page
+        await page.goto(
+            f"https://www.glassdoor.com/searchsuggest/typeahead?numSuggestions=8&source=GD_V2&version=NEW&rf=full&fallback=token&input={query}",
+            timeout=120000,
+        )
+        search_page = await page.content()
+
+        data = json.loads(search_page)
+
+        # Add a short pause
+        await asyncio.sleep(1)
+
+    return {
+        "employer_id": data[0]["employerId"],
+        "employer_name": data[0]["suggestion"],
+    }
+
+
+async def add_company_to_db(company_name: str, db: Session):
+    """
+    Add company_id and company_name to company table
+    """
+    company_data = await find_company(company_name)
+
+    # Validate the data with CompanyBase
+    try:
+        valid_data = CompanyBase.model_validate(company_data)
+    except Exception as e:
+        logging.error(f"Invalid data for company {company_name}: {e}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid data for company {company_name}: {e}"
+        )
+
+    observation = Company(**valid_data.model_dump())
+    db.add(observation)
+    db.commit()
+
+
+@app.post("/companies/")
+def find_all_companies(
+    background_tasks: BackgroundTasks, companies: List[str], db: Session = db_dependency
+):
+    for company in companies:
+        try:
+            background_tasks.add_task(add_company_to_db, company, db)
+        except Exception as e:
+            # Log the error and the company name
+            logging.error(
+                f"An error occurred while adding {company} to the database: {e}"
+            )
+            # Raise an HTTPException with a custom message
+            raise HTTPException(
+                status_code=400,
+                detail=f"An error occurred while adding {company} to the database: {e}",
+            )
+
+    return {"message": "Scraping complete, company id and name added to the database"}
+
+
+# Load company names DataFrame
+df = pd.read_csv("scraper/data/compustat_glassdoor_matches.csv")
+
+# Convert query column to a list
+companies = df["query"].tolist()
+
+
+if __name__ == "__main__":
+    # Create a TestClient instance
+    client = TestClient(app)
+
+    # Send a POST request to the "/companies/" endpoint
+    response = client.post("/companies/", json={"companies": companies})
+
+    # Print the response
+    print(response.json())
+
+    # Testing find company
+    # print(asyncio.run(find_company("google")))

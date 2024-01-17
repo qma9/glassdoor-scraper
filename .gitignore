@@ -1,0 +1,20 @@
+# Environment variables
+.env
+
+# Virtual environment
+.venv
+
+# Company matching data
+scraper/data
+
+# Log files
+logfile.log
+
+# Testing commands
+test/test_commands.py
+
+# Scrap code
+scraper/scrap.py
+
+# TODO list
+todo.md

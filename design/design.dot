@@ -1,0 +1,15 @@
+digraph {
+	bgcolor=black
+	node [color=lightgrey fillcolor=darkblue fontcolor=lightgrey style=filled]
+	edge [color=lightgrey fontcolor=lightgrey]
+	"API Post Endpoints" [shape=box]
+	"companies/"
+	"glassdoor/"
+	Scraper
+	"MySQL Database"
+	"API Post Endpoints" -> "companies/" [label="run first"]
+	"API Post Endpoints" -> "glassdoor/" [label="run second"]
+	"companies/" -> Scraper [label=triggers]
+	"glassdoor/" -> Scraper [label=triggers]
+	Scraper -> "MySQL Database" [label=updates]
+}

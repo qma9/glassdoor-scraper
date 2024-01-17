@@ -1,0 +1,13 @@
+requests
+playwright
+fastapi 
+sqlalchemy
+psycopg2-binary
+uvicorn
+beautifulsoup4
+pandas
+numpy
+mysql-connector-python
+pytest
+pytest-cov
+graphviz
