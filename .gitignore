@@ -1,5 +1,6 @@
 # pycache
 __pycache__/
+scraper/__pycache__/
 
 # Environment variables
 .env
@@ -24,6 +25,4 @@ todo.md
 
 # Unique_companies
 unique_companies.py
-
-.gitignore
 
