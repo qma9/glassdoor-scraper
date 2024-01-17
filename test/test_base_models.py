@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from base_models import ReviewBase
+from database.base_models import ReviewBase
 
 
 def test_review_base_init():

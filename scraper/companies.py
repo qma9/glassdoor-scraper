@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 import os
 import sys
 
-from database import engine
-from models import Company
-from base_models import CompanyBase
+from database.database import engine
+from database.models import Company
+from database.base_models import CompanyBase
 
 # Load .env file
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

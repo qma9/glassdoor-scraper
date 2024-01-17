@@ -5,8 +5,8 @@ import logging
 import asyncio
 from typing import Tuple, List
 
-from models import Company, Review
-from base_models import CompanyBase, ReviewBase
+from database.models import Company, Review
+from database.base_models import CompanyBase, ReviewBase
 from scraper.glassdoor import scrape_data, Region, Url
 from utils import configure_logging
 

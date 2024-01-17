@@ -1,7 +1,7 @@
 from sqlalchemy import Boolean, Column, Integer, String, ForeignKey, DateTime, Float
 from sqlalchemy import event
 
-from database import Base
+from database.database import Base
 
 
 class Company(Base):

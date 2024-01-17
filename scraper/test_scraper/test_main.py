@@ -10,11 +10,11 @@ import asyncio
 import logging
 
 from scraper.main import main
-from models import Company, Review
-from base_models import CompanyBase, ReviewBase
+from database.models import Company, Review
+from database.base_models import CompanyBase, ReviewBase
 from scraper.glassdoor import scrape_data, Url, Region
 from utils import configure_logging
-from database import URL_DB
+from database.database import URL_DB
 
 # Configure logging
 configure_logging()

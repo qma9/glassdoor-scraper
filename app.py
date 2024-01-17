@@ -6,8 +6,8 @@ from typing import Annotated
 import logging
 
 from scraper.main import main
-from database import engine
-from models import Review
+from database.database import engine
+from database.models import Review
 from utils import get_db, configure_logging
 
 # Configure logging

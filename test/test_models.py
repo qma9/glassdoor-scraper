@@ -1,4 +1,4 @@
-from models import Review
+from database.models import Review
 
 
 def test_review_init():

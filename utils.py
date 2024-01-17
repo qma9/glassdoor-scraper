@@ -9,7 +9,7 @@ def get_db():
     """
     Get a database session.
     """
-    from database import SessionLocal
+    from database.database import SessionLocal
 
     db = SessionLocal()
     try:
