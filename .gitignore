@@ -11,6 +11,9 @@ scraper/__pycache__/
 # Company matching data
 scraper/data
 
+# Structure files for development
+scraper/structure
+
 # Log files
 logfile.log
 
