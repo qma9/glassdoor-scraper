@@ -1,0 +1,69 @@
+import atexit
+import json
+import logging.config
+import logging.handlers
+import pathlib
+import queue
+
+logger = logging.getLogger(__name__)
+
+
+def setup_logging():
+    config_file = pathlib.Path("config.json")
+    with open(config_file) as f_in:
+        config = json.load(f_in)
+
+    log_queue = queue.Queue(-1)  # Create a Queue
+    config["handlers"]["queue_handler"][
+        "queue"
+    ] = log_queue  # Add the Queue to the queue_handler configuration
+
+    logging.config.dictConfig(config)
+
+    # Get the handlers from the root logger
+    root_logger = logging.getLogger()
+    handlers = root_logger.handlers
+
+    # Create a QueueListener with the handlers
+    listener = logging.handlers.QueueListener(log_queue, *handlers)
+    listener.start()
+
+    # Register the stop method of the listener to be called when the program is exiting
+    atexit.register(listener.stop)
+
+    # Replace the handlers in the root logger with the QueueHandler
+    queue_handler = [
+        handler
+        for handler in handlers
+        if isinstance(handler, logging.handlers.QueueHandler)
+    ][0]
+    root_logger.handlers = [queue_handler]
+
+    """queue_handler = logging.getLogger().handlers[0]
+    if queue_handler is not None:
+        # Get the handlers from the config
+        handlers = [logging.getHandlerByName(name) for name in config["handlers"]]
+        # Create a QueueListener with the handlers
+        queue_handler.listener = logging.handlers.QueueListener(
+            queue_handler.queue, *handlers
+        )
+        queue_handler.listener.start()
+        atexit.register(queue_handler.listener.stop)"""
+
+
+def main():
+    setup_logging()
+    logger.setLevel(logging.INFO)
+    logger.debug("debug message", extra={"x": "hello"})
+    logger.info("info message")
+    logger.warning("warning message")
+    logger.error("error message")
+    logger.critical("critical message")
+    try:
+        1 / 0
+    except ZeroDivisionError:
+        logger.exception("exception message")
+
+
+if __name__ == "__main__":
+    main()

@@ -16,11 +16,15 @@ from database.database import engine
 from database.models import Company
 from database.base_models import CompanyBase
 
+
 # Load .env file
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 load_dotenv()
 
 from utils import get_db, configure_logging, get_unique_companies
+from setup import logger, setup_logging
 
 # Configure logging
 configure_logging()
@@ -103,10 +107,10 @@ async def add_company_to_db(company_name: str, db: Session) -> None:
     try:
         valid_data = CompanyBase.model_validate(company_data)
     except Exception as e:
-        logging.error(f"Invalid data for company {company_name}: {e}")
-        raise HTTPException(
-            status_code=400, detail=f"Invalid data for company {company_name}: {e}"
-        )
+        logger.error(f"Invalid data for company {company_name}: {e}")
+    raise HTTPException(
+        status_code=400, detail=f"Invalid data for company {company_name}: {e}"
+    )
 
     observation = Company(**valid_data.model_dump())
     db.add(observation)

@@ -1,6 +1,7 @@
 # pycache
 __pycache__/
 scraper/__pycache__/
+logging/__pycache__/
 
 # Environment variables
 .env
@@ -16,6 +17,7 @@ scraper/structure
 
 # Log files
 logfile.log
+log/log.jsonl  
 
 # Testing commands
 test/test_commands.sh
