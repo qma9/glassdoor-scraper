@@ -6,7 +6,6 @@ import pandas as pd
 
 from typing import Dict, Annotated, List
 import json
-import logging
 import asyncio
 from dotenv import load_dotenv
 import os
@@ -23,11 +22,11 @@ sys.path.append(
 )
 load_dotenv()
 
-from utils import get_db, configure_logging, get_unique_companies
-from setup import logger, setup_logging
+from utils import get_db, get_unique_companies
+from log.setup import logger, setup_logging
 
 # Configure logging
-configure_logging()
+setup_logging()
 
 # Create the Company table
 Company.__table__.create(bind=engine)
@@ -50,7 +49,7 @@ db_dependency = Annotated[Session, Depends(get_db)]
 
 async def find_company(query: str) -> Dict[int, str]:
     """
-    Find company Glassdoor ID and name by query. e.g. "ebay" will return "eBay" with ID 7853.
+    Find company Glassdoor ID and name by query. e.g. "nvidia" will return "NVIDIA" with ID 7633.
 
     Args:
         query (str): The query string to search for a company.
@@ -81,10 +80,23 @@ async def find_company(query: str) -> Dict[int, str]:
         # Add a short pause
         await asyncio.sleep(1)
 
-    return {
-        "employer_id": data[0]["employerId"],
-        "employer_name": data[0]["suggestion"],
-    }
+    if not data:
+        logger.error(f"No search results for company {query} on Glassdoor")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No search results for company {query} on Glassdoor",
+        )
+
+    if data[0]["category"] == "company" or "multicat":
+        return {
+            "employer_id": data[0]["employerId"],
+            "employer_name": data[0]["suggestion"],
+        }
+    else:
+        logger.error(f"Company {query} not found on Glassdoor")
+        raise HTTPException(
+            status_code=404, detail=f"Company {query} not found on Glassdoor"
+        )
 
 
 async def add_company_to_db(company_name: str, db: Session) -> None:
@@ -108,9 +120,9 @@ async def add_company_to_db(company_name: str, db: Session) -> None:
         valid_data = CompanyBase.model_validate(company_data)
     except Exception as e:
         logger.error(f"Invalid data for company {company_name}: {e}")
-    raise HTTPException(
-        status_code=400, detail=f"Invalid data for company {company_name}: {e}"
-    )
+        raise HTTPException(
+            status_code=400, detail=f"Invalid data for company {company_name}: {e}"
+        )
 
     observation = Company(**valid_data.model_dump())
     db.add(observation)
@@ -137,7 +149,7 @@ def find_all_companies(
             background_tasks.add_task(add_company_to_db, company, db)
         except Exception as e:
             # Log the error and the company name
-            logging.error(
+            logger.error(
                 f"An error occurred while adding {company} to the database: {e}"
             )
             # Raise an HTTPException with a custom message

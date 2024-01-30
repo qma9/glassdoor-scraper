@@ -3,15 +3,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from typing import Annotated
-import logging
 
 from scraper.main import main
 from database.database import engine
 from database.models import Review
-from utils import get_db, configure_logging
+from log.setup import logger, setup_logging
+from utils import get_db
 
 # Configure logging
-configure_logging()
+setup_logging()
 
 # Create the database tables
 Review.__table__.create(bind=engine)
@@ -39,7 +39,7 @@ def scrape(db: Session = db_dependency):
         main(db)
     except Exception as e:
         # Log the error
-        logging.error(f"An error occurred while scraping: {e}")
+        logger.error(f"An error occurred while scraping: {e}")
         # Raise an HTTPException with a custom message
         raise HTTPException(
             status_code=400, detail=f"An error occurred while scraping: {e}"

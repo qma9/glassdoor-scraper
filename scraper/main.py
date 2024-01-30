@@ -1,17 +1,16 @@
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
 
-import logging
 import asyncio
 from typing import Tuple, List
 
 from database.models import Company, Review
 from database.base_models import CompanyBase, ReviewBase
 from scraper.glassdoor import scrape_data, Region, Url
-from utils import configure_logging
+from log.setup import logger, setup_logging
 
-# Configure logging
-configure_logging()
+# Setup logging
+setup_logging()
 
 
 def main(db: Session) -> None:
@@ -60,7 +59,7 @@ def main(db: Session) -> None:
         try:
             valid_data = CompanyBase(**overview_data)
         except ValidationError as e:
-            logging.error(f"Invalid data for company eBay Motors Group: {e}")
+            logger.error(f"Invalid data for company {employer_name}: {e}")
             return  # Exit the function if the data is invalid
 
         # Fetch the existing company from the database
@@ -82,7 +81,7 @@ def main(db: Session) -> None:
             try:
                 valid_review = ReviewBase(**review)
             except ValidationError as e:
-                logging.error(f"Invalid data for review: {e}")
+                logger.error(f"Invalid data for review: {e}")
                 continue  # Skip to the next review if the data is invalid
 
             # Create a new Review object with the validated data

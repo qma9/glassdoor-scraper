@@ -39,17 +39,6 @@ def setup_logging():
     ][0]
     root_logger.handlers = [queue_handler]
 
-    """queue_handler = logging.getLogger().handlers[0]
-    if queue_handler is not None:
-        # Get the handlers from the config
-        handlers = [logging.getHandlerByName(name) for name in config["handlers"]]
-        # Create a QueueListener with the handlers
-        queue_handler.listener = logging.handlers.QueueListener(
-            queue_handler.queue, *handlers
-        )
-        queue_handler.listener.start()
-        atexit.register(queue_handler.listener.stop)"""
-
 
 def main():
     setup_logging()
@@ -66,4 +55,5 @@ def main():
 
 
 if __name__ == "__main__":
+    # Test logging
     main()

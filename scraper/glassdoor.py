@@ -8,19 +8,20 @@ from enum import Enum
 import json
 import re
 import asyncio
-import logging
 from dotenv import load_dotenv
 import sys
 import os
 
 # Load .env file
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 load_dotenv()
 
-from utils import configure_logging
+from log.setup import logger, setup_logging
 
 # Configure logging
-configure_logging()
+setup_logging()
 
 # Bright Data headless browser authentication credentials
 cred = {
@@ -246,7 +247,7 @@ async def scrape_data(
         Tuple[Dict[str, int | float], Dict[str, Dict[str, str | int]]]: A tuple containing the overview information and the scraped reviews.
 
     """
-    logging.info("scraping reviews from %s", url)
+    logger.info("scraping reviews from %s", url)
 
     async with async_playwright() as pw:
         browser = await pw.chromium.connect_over_cdp(browser_url)
@@ -271,7 +272,7 @@ async def scrape_data(
         if max_pages and max_pages < total_pages:
             total_pages = max_pages
 
-        logging.info(
+        logger.info(
             "scraped first page of reviews of %s, scraping remaining %d pages",
             url,
             total_pages - 1,
@@ -286,12 +287,12 @@ async def scrape_data(
                 new_reviews = parse_reviews(result)
                 reviews.update(new_reviews)
             else:
-                logging.error("failed to scrape %s", page_url)
+                logger.error("failed to scrape %s", page_url)
 
             # Add a delay
             await asyncio.sleep(1)
 
-        logging.info(
+        logger.info(
             "scraped %d reviews from %s in %d pages", len(reviews), url, total_pages
         )
 
@@ -330,15 +331,15 @@ class Region(Enum):
 
 class Url:
     """
-    Helper URL generator for glassdoor.com pages from given employer name and id.
+    Helper URL generator for Glassdoor pages from given employer name and id.
 
     For example:
-    GlassdoorUrl.overview("eBay Motors Group", "4189745")
-    https://www.glassdoor.com/Overview/Working-at-eBay-Motors-Group-EI_IE4189745.11,28.htm
+    GlassdoorUrl.overview("NVIDIA", "7633")
+    https://www.glassdoor.com/Overview/Working-at-NVIDIA-EI_IE7633.11,17.htm
 
     Glassdoor allows any prefix for employer name and to indicate the prefix suffix numbers are used like:
-    https://www.glassdoor.com/Overview/Working-at-eBay-Motors-Group-EI_IE4189745.11,28.htm
-    11,28 is the slice where employer name is
+    https://www.glassdoor.com/Overview/Working-at-NVIDIA-EI_IE7633.11,17.htm
+    11,17 is the slice where employer name is
     """
 
     @staticmethod
