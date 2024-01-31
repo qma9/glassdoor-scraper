@@ -69,9 +69,18 @@ def find_hidden_data(result: str) -> dict:
                 if matches:
                     data = json.loads(matches[0])
                 else:
-                    data = {}  # or some other default value
+                    logger.error("No matches found in gd-reviews.bundle.3d5cc.js file")
+                    data = {}
             else:
-                data = {}  # or some other default value
+                logger.error("No script tag found for gd-reviews.bundle.3d5cc.js file")
+                data = {}
+
+    # Check if data is an empty dictionary and log soup object if so
+    if not data:
+        logger.error(
+            f"No Apollo Graphql or ApolloState js variable found",
+            extra={"soup": soup.prettify()},
+        )
 
     return data
 
@@ -88,51 +97,70 @@ def parse_overview(result: str) -> Dict[str, str | int]:
 
     """
     cache = find_hidden_data(result)
-    root_query = cache.get("ROOT_QUERY", {})
-    overview_data = next(
-        (
-            value
-            for key, value in root_query.items()
-            if key.startswith("employerReviewsRG")
-            and isinstance(value, dict)
-            and value.get("__typename") == "EmployerReviewsRG"
-        ),
-        {},
-    )
+    if not cache:
+        logger.error(f"No hidden data found in Glassdoor page html")
+    else:
+        try:
+            root_query = cache["ROOT_QUERY"]
+            overview_data = next(
+                (
+                    value
+                    for key, value in root_query.items()
+                    if key.startswith("employerReviewsRG")
+                    and isinstance(value, dict)
+                    and value.get("__typename") == "EmployerReviewsRG"
+                ),
+                {},
+            )
+        except KeyError:
+            logger.error(f"ROOT_QUERY key not found in cache")
 
-    # Extract company overview information
-    overview = {
-        "employer_id": int(
-            overview_data["employer"]["__ref"].split(":")[1]
-            if "employer" in overview_data
-            else None
-        ),  # comment out later once all companies are retrieved
-        # "employer_name": overview_data["employer"]["name"],
-        "number_of_pages": overview_data["numberOfPages"],
-        "all_reviews_count": overview_data["allReviewsCount"],
-        "rated_reviews_count": overview_data["ratedReviewsCount"],
-        "overall_rating": overview_data["ratings"]["overallRating"],
-        "ceo_name": overview_data["ratings"]["ratedCeo"]["name"]
-        if overview_data["ratings"]["ratedCeo"] is not None
-        else None,
-        "ceo_rating": overview_data["ratings"]["ceoRating"],
-        "recommend_to_friend_rating": overview_data["ratings"][
-            "recommendToFriendRating"
-        ],
-        "culture_and_values_rating": overview_data["ratings"]["cultureAndValuesRating"],
-        "diversity_and_inclusion_rating": overview_data["ratings"][
-            "diversityAndInclusionRating"
-        ],
-        "career_opportunities_rating": overview_data["ratings"][
-            "careerOpportunitiesRating"
-        ],
-        "work_life_balance_rating": overview_data["ratings"]["workLifeBalanceRating"],
-        "senior_management_rating": overview_data["ratings"]["seniorManagementRating"],
-        "compensation_and_benefits_rating": overview_data["ratings"][
-            "compensationAndBenefitsRating"
-        ],
-        "business_outlook_rating": overview_data["ratings"]["businessOutlookRating"],
-    }
+    try:
+        # Extract company overview information
+        overview = {
+            "employer_id": int(
+                overview_data["employer"]["__ref"].split(":")[1]
+                if "employer" in overview_data
+                else None
+            ),  # comment out later once all companies are retrieved
+            # "employer_name": overview_data["employer"]["name"],
+            "number_of_pages": overview_data["numberOfPages"],
+            "all_reviews_count": overview_data["allReviewsCount"],
+            "rated_reviews_count": overview_data["ratedReviewsCount"],
+            "overall_rating": overview_data["ratings"]["overallRating"],
+            "ceo_name": overview_data["ratings"]["ratedCeo"]["name"]
+            if overview_data["ratings"]["ratedCeo"] is not None
+            else None,
+            "ceo_rating": overview_data["ratings"]["ceoRating"],
+            "recommend_to_friend_rating": overview_data["ratings"][
+                "recommendToFriendRating"
+            ],
+            "culture_and_values_rating": overview_data["ratings"][
+                "cultureAndValuesRating"
+            ],
+            "diversity_and_inclusion_rating": overview_data["ratings"][
+                "diversityAndInclusionRating"
+            ],
+            "career_opportunities_rating": overview_data["ratings"][
+                "careerOpportunitiesRating"
+            ],
+            "work_life_balance_rating": overview_data["ratings"][
+                "workLifeBalanceRating"
+            ],
+            "senior_management_rating": overview_data["ratings"][
+                "seniorManagementRating"
+            ],
+            "compensation_and_benefits_rating": overview_data["ratings"][
+                "compensationAndBenefitsRating"
+            ],
+            "business_outlook_rating": overview_data["ratings"][
+                "businessOutlookRating"
+            ],
+        }
+
+    except KeyError as e:
+        logger.error(f"Key {e} not found in overview_data")
+        raise
 
     return overview
 
@@ -151,85 +179,101 @@ def parse_reviews(result: str) -> Dict[str, Dict[str, str | int]]:
             date and time, ratings, job details, location, pros and cons, etc.
     """
     cache = find_hidden_data(result)
-    root_query = cache.get("ROOT_QUERY", {})
-    reviews_data = next(
-        (
-            value["reviews"]
-            for key, value in root_query.items()
-            if key.startswith("employerReviewsRG")
-            and isinstance(value, dict)
-            and value.get("__typename") == "EmployerReviewsRG"
-            and "reviews" in value
-        ),
-        [],
-    )
+    if not cache:
+        logger.error(f"No hidden data found in Glassdoor page html")
+    else:
+        try:
+            root_query = cache["ROOT_QUERY"]
+            reviews_data = next(
+                (
+                    value["reviews"]
+                    for key, value in root_query.items()
+                    if key.startswith("employerReviewsRG")
+                    and isinstance(value, dict)
+                    and value.get("__typename") == "EmployerReviewsRG"
+                    and "reviews" in value
+                ),
+                [],
+            )
+        except KeyError:
+            logger.error(f"ROOT_QUERY key not found in cache")
 
-    # Extract city and job title names
-    city_job_title = {
-        key: value
-        for key, value in cache.items()
-        if key.startswith(("City", "JobTitle"))
-    }
-
-    # Extract reviews
-    reviews = {}
-
-    for review in reviews_data:
-        extracted_review = {
-            "review_id": review["reviewId"],
-            "employer_id": int(review["employer"]["__ref"].split(":")[1]),
-            "date_time": datetime.fromisoformat(
-                review["reviewDateTime"].replace("T", " ")
-            ),
-            "rating_overall": review["ratingOverall"],
-            "rating_ceo": review["ratingCeo"]
-            if review["ratingCeo"] is not None
-            else None,
-            "rating_business_outlook": review["ratingBusinessOutlook"],
-            "rating_work_life_balance": review["ratingWorkLifeBalance"],
-            "rating_culture_and_values": review["ratingCultureAndValues"],
-            "rating_diversity_and_inclusion": review["ratingDiversityAndInclusion"],
-            "rating_senior_seadership": review["ratingSeniorLeadership"],
-            "rating_recommend_to_friend": review["ratingRecommendToFriend"],
-            "rating_career_opportunities": review["ratingCareerOpportunities"],
-            "rating_compensation_and_benefits": review["ratingCompensationAndBenefits"],
-            "is_current_job": bool(review["isCurrentJob"]),
-            "length_of_employment": review["lengthOfEmployment"],
-            "employment_status": review["employmentStatus"],
-            "job_ending_year": review["jobEndingYear"]
-            if review["jobEndingYear"] is not None
-            else None,
-            "job_title": review["jobTitle"]["text"]
-            if review["jobTitle"] is not None and "text" in review["jobTitle"]
-            else review["jobTitle"]["__ref"]
-            if review["jobTitle"] is not None and "__ref" in review["jobTitle"]
-            else None,
-            "location": review["location"]["__ref"]
-            if review["location"] is not None
-            else None,
-            "pros": review["pros"],
-            "cons": review["cons"],
-            "summary": review["summary"],
-            "advice": review["advice"],
-            "count_helpful": review["countHelpful"],
-            "count_not_helpful": review["countNotHelpful"],
-            "is_covid19": bool(review["isCovid19"]),
+    try:
+        # Extract city and job title names
+        city_job_title = {
+            key: value
+            for key, value in cache.items()
+            if key.startswith(("City", "JobTitle"))
         }
+    except KeyError as e:
+        logger.error(f"Key {e} not found in cache")
 
-        # Add job title
-        if extracted_review["job_title"] in city_job_title:
-            extracted_review["job_title"] = city_job_title[
-                extracted_review["job_title"]
-            ]["text"]
+    try:
+        # Extract reviews
+        reviews = {}
 
-        # Add city name
-        if extracted_review["location"] in city_job_title:
-            extracted_review["location"] = city_job_title[extracted_review["location"]][
-                "name"
-            ]
+        for review in reviews_data:
+            extracted_review = {
+                "review_id": review["reviewId"],
+                "employer_id": int(review["employer"]["__ref"].split(":")[1]),
+                "date_time": datetime.fromisoformat(
+                    review["reviewDateTime"].replace("T", " ")
+                ),
+                "rating_overall": review["ratingOverall"],
+                "rating_ceo": review["ratingCeo"]
+                if review["ratingCeo"] is not None
+                else None,
+                "rating_business_outlook": review["ratingBusinessOutlook"],
+                "rating_work_life_balance": review["ratingWorkLifeBalance"],
+                "rating_culture_and_values": review["ratingCultureAndValues"],
+                "rating_diversity_and_inclusion": review["ratingDiversityAndInclusion"],
+                "rating_senior_seadership": review["ratingSeniorLeadership"],
+                "rating_recommend_to_friend": review["ratingRecommendToFriend"],
+                "rating_career_opportunities": review["ratingCareerOpportunities"],
+                "rating_compensation_and_benefits": review[
+                    "ratingCompensationAndBenefits"
+                ],
+                "is_current_job": bool(review["isCurrentJob"]),
+                "length_of_employment": review["lengthOfEmployment"],
+                "employment_status": review["employmentStatus"],
+                "job_ending_year": review["jobEndingYear"]
+                if review["jobEndingYear"] is not None
+                else None,
+                "job_title": review["jobTitle"]["text"]
+                if review["jobTitle"] is not None and "text" in review["jobTitle"]
+                else review["jobTitle"]["__ref"]
+                if review["jobTitle"] is not None and "__ref" in review["jobTitle"]
+                else None,
+                "location": review["location"]["__ref"]
+                if review["location"] is not None
+                else None,
+                "pros": review["pros"],
+                "cons": review["cons"],
+                "summary": review["summary"],
+                "advice": review["advice"],
+                "count_helpful": review["countHelpful"],
+                "count_not_helpful": review["countNotHelpful"],
+                "is_covid19": bool(review["isCovid19"]),
+            }
 
-        # Add review to reviews
-        reviews[review["reviewId"]] = extracted_review
+            # Add job title
+            if extracted_review["job_title"] in city_job_title:
+                extracted_review["job_title"] = city_job_title[
+                    extracted_review["job_title"]
+                ]["text"]
+
+            # Add city name
+            if extracted_review["location"] in city_job_title:
+                extracted_review["location"] = city_job_title[
+                    extracted_review["location"]
+                ]["name"]
+
+            # Add review to reviews
+            reviews[review["reviewId"]] = extracted_review
+
+    except KeyError as e:
+        logger.error(f"Key {e} not found in review", extra={"review": review})
+        raise
 
     return reviews
 

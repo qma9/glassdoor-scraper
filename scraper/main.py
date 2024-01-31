@@ -44,23 +44,29 @@ def main(db: Session) -> None:
     companies = get_all_companies(db)
 
     for employer_name, employer_id in companies:
-        overview_data, reviews_data = loop.run_until_complete(
-            scrape_data(
-                Url.reviews(
-                    employer_name,
-                    employer_id,
-                    regions=[Region.UNITED_STATES, Region.CANADA_ENGLISH],
-                ),
-                max_pages=1,
+        try:
+            overview_data, reviews_data = loop.run_until_complete(
+                scrape_data(
+                    Url.reviews(
+                        employer_name,
+                        employer_id,
+                        regions=[Region.UNITED_STATES, Region.CANADA_ENGLISH],
+                    )
+                )
             )
-        )
+        except Exception as e:
+            logger.error(
+                f"Error scraping data for company {employer_name}: {e}",
+                extra={"employer_id": employer_id, "employer_name": employer_name},
+            )
+            continue  # Skip to the next company if there is an error
 
         # Validate the data with CompanyBase
         try:
             valid_data = CompanyBase(**overview_data)
         except ValidationError as e:
             logger.error(f"Invalid data for company {employer_name}: {e}")
-            return  # Exit the function if the data is invalid
+            continue  # Skip to the next company if the data is invalid
 
         # Fetch the existing company from the database
         company = (

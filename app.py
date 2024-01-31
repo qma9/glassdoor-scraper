@@ -42,9 +42,12 @@ def scrape(db: Session = db_dependency):
         logger.error(f"An error occurred while scraping: {e}")
         # Raise an HTTPException with a custom message
         raise HTTPException(
-            status_code=400, detail=f"An error occurred while scraping: {e}"
+            status_code=500, detail=f"An error occurred while scraping: {e}"
         )
 
+    logger.info(
+        "Scraping complete, overview information and reviews added to respective tables"
+    )
     return {
         "message": "Scraping complete, overview information and reviews added to respective tables"
     }

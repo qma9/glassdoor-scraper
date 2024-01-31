@@ -47,7 +47,7 @@ browser_url = f'wss://{auth}@{cred["host"]}'
 db_dependency = Annotated[Session, Depends(get_db)]
 
 
-async def find_company(query: str) -> Dict[int, str]:
+async def find_company(query: str) -> Dict[str, str | int]:
     """
     Find company Glassdoor ID and name by query. e.g. "nvidia" will return "NVIDIA" with ID 7633.
 
@@ -55,7 +55,7 @@ async def find_company(query: str) -> Dict[int, str]:
         query (str): The query string to search for a company.
 
     Returns:
-        Dict[int, str]: A dictionary containing the Glassdoor ID and name of the company.
+        Dict[str, str | int]: A dictionary containing the Glassdoor ID and name of the company.
     """
     async with async_playwright() as pw:
         browser = await pw.chromium.connect_over_cdp(browser_url)
@@ -86,16 +86,15 @@ async def find_company(query: str) -> Dict[int, str]:
             status_code=404,
             detail=f"No search results for company {query} on Glassdoor",
         )
-
-    if data[0]["category"] == "company" or "multicat":
+    elif data[0]["category"] == "company" or data[0]["category"] == "multicat":
         return {
             "employer_id": data[0]["employerId"],
             "employer_name": data[0]["suggestion"],
         }
     else:
-        logger.error(f"Company {query} not found on Glassdoor")
+        logger.error(f"Unexpected data for company {query} on Glassdoor: {data}")
         raise HTTPException(
-            status_code=404, detail=f"Company {query} not found on Glassdoor"
+            status_code=404, detail=f"Unexpected data for company {query} on Glassdoor"
         )
 
 
@@ -152,12 +151,9 @@ def find_all_companies(
             logger.error(
                 f"An error occurred while adding {company} to the database: {e}"
             )
-            # Raise an HTTPException with a custom message
-            raise HTTPException(
-                status_code=400,
-                detail=f"An error occurred while adding {company} to the database: {e}",
-            )
+            continue
 
+    logger.info("Scraping complete, company id and name added to the database")
     return {"message": "Scraping complete, company id and name added to the database"}
 
 
