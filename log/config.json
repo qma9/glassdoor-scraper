@@ -32,7 +32,7 @@
         "level": "DEBUG",
         "formatter": "json",
         "filename": "log.jsonl",
-        "maxBytes": 10000,
+        "maxBytes": 104857600,
         "backupCount": 3
       },
       "queue_handler": {

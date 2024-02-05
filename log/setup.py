@@ -4,14 +4,23 @@ import logging.config
 import logging.handlers
 import pathlib
 import queue
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 logger = logging.getLogger(__name__)
 
 
 def setup_logging():
-    config_file = pathlib.Path("config.json")
+    config_file = pathlib.Path(__file__).parent / "config.json"
     with open(config_file) as f_in:
         config = json.load(f_in)
+
+    # Modify filename attribute
+    config["handlers"]["file_json"]["filename"] = os.path.join(
+        os.getenv("LOG_PATH"), "log.jsonl"
+    )
 
     log_queue = queue.Queue(-1)  # Create a Queue
     config["handlers"]["queue_handler"][

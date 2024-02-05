@@ -17,7 +17,8 @@ scraper/structure
 
 # Log files
 logfile.log
-log/log.jsonl  
+log.jsonl*
+log/log.jsonl*  
 
 # Testing commands
 test/test_commands.sh
@@ -31,3 +32,8 @@ todo.md
 # Unique_companies
 unique_companies.py
 
+# mysql commands
+mysql_commands.txt
+
+# reddit
+reddit.txt
