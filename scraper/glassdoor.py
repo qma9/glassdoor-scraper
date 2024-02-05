@@ -1,6 +1,5 @@
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
-import requests
 
 from typing import Optional, Dict, Tuple, List
 from datetime import datetime
@@ -13,9 +12,7 @@ import sys
 import os
 
 # Load .env file
-sys.path.append(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv()
 
 from log.setup import logger, setup_logging
@@ -48,44 +45,42 @@ def find_hidden_data(result: str) -> dict:
     # Create a BeautifulSoup object from the response text
     soup = BeautifulSoup(result, "html.parser")
 
-    # data can be in __NEXT_DATA__ cache
-    data = soup.select_one("script#__NEXT_DATA__")
-    if data:
-        data = json.loads(data.string)["props"]["pageProps"]["apolloCache"]
-    else:  # or in direct apolloState cache
-        matches = re.findall(r'apolloState":\s*({.+})};', result)
-        if matches:
-            data = json.loads(matches[0])
-        else:  # or in gd-reviews.bundle.3d5cc.js file
-            script_tag = soup.find(
-                "script", attrs={"src": re.compile(r"gd-reviews\.bundle\.3d5cc\.js$")}
-            )
-            if script_tag:
-                # Fetch the gd-reviews.bundle.3d5cc.js file
-                response = requests.get(script_tag["src"])
+    # Find all script tags that contain the appCache data
+    script_tags = soup.find_all(
+        "script", string=lambda text: text is not None and "window.appCache" in text
+    )
 
-                # Extract the apolloState data from the file
-                matches = re.findall(r'apolloState":\s*({.+})};', response.text)
-                if matches:
-                    data = json.loads(matches[0])
-                else:
-                    logger.error("No matches found in gd-reviews.bundle.3d5cc.js file")
-                    data = {}
-            else:
-                logger.error("No script tag found for gd-reviews.bundle.3d5cc.js file")
-                data = {}
+    data = {}
 
-    # Check if data is an empty dictionary and log soup object if so
+    for script_tag in script_tags:
+        # Extract the JavaScript code from the script tag
+        javascript_code = script_tag.string
+
+        # Find the start and end of the appCache JSON object
+        start = javascript_code.find("window.appCache = ") + len("window.appCache = ")
+        end = javascript_code.find(
+            ";", start
+        )  # find the semicolon after the JSON object
+
+        # Extract the appCache JSON object
+        app_cache_json = javascript_code[start:end]
+
+        # Parse the appCache JSON object
+        app_cache = json.loads(app_cache_json)
+
+        # Extract the apolloState data from the appCache
+        data.update(app_cache.get("apolloState", {}))
+
     if not data:
         logger.error(
-            f"No Apollo Graphql or ApolloState js variable found",
+            f"No Apollo Graphql or window.appCache js variable found",
             extra={"soup": soup.prettify()},
         )
 
     return data
 
 
-def parse_overview(result: str) -> Dict[str, str | int]:
+def parse_overview(apollo_state: str) -> Dict[str, str | int]:
     """
     Parse overview from Glassdoor page HTML.
 
@@ -96,7 +91,8 @@ def parse_overview(result: str) -> Dict[str, str | int]:
         Dict[str, str | int]: A dictionary containing the parsed overview data.
 
     """
-    cache = find_hidden_data(result)
+    overview_data = {}
+    cache = apollo_state  # find_hidden_data(result)
     if not cache:
         logger.error(f"No hidden data found in Glassdoor page html")
     else:
@@ -128,9 +124,12 @@ def parse_overview(result: str) -> Dict[str, str | int]:
             "all_reviews_count": overview_data["allReviewsCount"],
             "rated_reviews_count": overview_data["ratedReviewsCount"],
             "overall_rating": overview_data["ratings"]["overallRating"],
-            "ceo_name": overview_data["ratings"]["ratedCeo"]["name"]
-            if overview_data["ratings"]["ratedCeo"] is not None
-            else None,
+            "ceo_name": (
+                overview_data["ratings"]["ratedCeo"]["name"]
+                if overview_data["ratings"]["ratedCeo"] is not None
+                and "name" in overview_data["ratings"]["ratedCeo"]
+                else None
+            ),
             "ceo_rating": overview_data["ratings"]["ceoRating"],
             "recommend_to_friend_rating": overview_data["ratings"][
                 "recommendToFriendRating"
@@ -165,7 +164,7 @@ def parse_overview(result: str) -> Dict[str, str | int]:
     return overview
 
 
-def parse_reviews(result: str) -> Dict[str, Dict[str, str | int]]:
+def parse_reviews(apollo_state: str) -> Dict[str, Dict[str, str | int]]:
     """
     Parse data from Glassdoor page HTML.
 
@@ -178,7 +177,7 @@ def parse_reviews(result: str) -> Dict[str, Dict[str, str | int]]:
             various attributes of the review, such as review ID, employer ID,
             date and time, ratings, job details, location, pros and cons, etc.
     """
-    cache = find_hidden_data(result)
+    cache = apollo_state  # find_hidden_data(result)
     if not cache:
         logger.error(f"No hidden data found in Glassdoor page html")
     else:
@@ -220,9 +219,9 @@ def parse_reviews(result: str) -> Dict[str, Dict[str, str | int]]:
                     review["reviewDateTime"].replace("T", " ")
                 ),
                 "rating_overall": review["ratingOverall"],
-                "rating_ceo": review["ratingCeo"]
-                if review["ratingCeo"] is not None
-                else None,
+                "rating_ceo": (
+                    review["ratingCeo"] if review["ratingCeo"] is not None else None
+                ),
                 "rating_business_outlook": review["ratingBusinessOutlook"],
                 "rating_work_life_balance": review["ratingWorkLifeBalance"],
                 "rating_culture_and_values": review["ratingCultureAndValues"],
@@ -236,17 +235,26 @@ def parse_reviews(result: str) -> Dict[str, Dict[str, str | int]]:
                 "is_current_job": bool(review["isCurrentJob"]),
                 "length_of_employment": review["lengthOfEmployment"],
                 "employment_status": review["employmentStatus"],
-                "job_ending_year": review["jobEndingYear"]
-                if review["jobEndingYear"] is not None
-                else None,
-                "job_title": review["jobTitle"]["text"]
-                if review["jobTitle"] is not None and "text" in review["jobTitle"]
-                else review["jobTitle"]["__ref"]
-                if review["jobTitle"] is not None and "__ref" in review["jobTitle"]
-                else None,
-                "location": review["location"]["__ref"]
-                if review["location"] is not None
-                else None,
+                "job_ending_year": (
+                    review["jobEndingYear"]
+                    if review["jobEndingYear"] is not None
+                    else None
+                ),
+                "job_title": (
+                    review["jobTitle"]["text"]
+                    if review["jobTitle"] is not None and "text" in review["jobTitle"]
+                    else (
+                        review["jobTitle"]["__ref"]
+                        if review["jobTitle"] is not None
+                        and "__ref" in review["jobTitle"]
+                        else None
+                    )
+                ),
+                "location": (
+                    review["location"]["__ref"]
+                    if review["location"] is not None
+                    else None
+                ),
                 "pros": review["pros"],
                 "cons": review["cons"],
                 "summary": review["summary"],
@@ -280,7 +288,7 @@ def parse_reviews(result: str) -> Dict[str, Dict[str, str | int]]:
 
 async def scrape_data(
     url: str, max_pages: Optional[int] = None
-) -> Tuple[Dict[str, int | float], Dict[str, Dict[str, str | int]]]:
+) -> Tuple[Dict[str, int | float], Dict[str, Dict[str, str | int]]] | None:
     """Scrape Glassdoor reviews listings from reviews pages (with pagination).
 
     Args:
@@ -300,17 +308,32 @@ async def scrape_data(
         # Only allow document requests
         await page.route(
             "**/*",
-            lambda route, request: route.continue_()
-            if request.resource_type == "document"
-            else route.abort(),
+            lambda route, request: (
+                route.continue_()
+                if request.resource_type == "document"
+                else route.abort()
+            ),
         )
 
         # Navigate to the first page
         await page.goto(url, timeout=120000)
-        first_page = await page.content()
 
-        overview = parse_overview(first_page)
-        reviews = parse_reviews(first_page)
+        # Create a locator for the script
+        script_locator = page.locator("body > script:nth-child(4)")
+
+        # Wait for the script to load
+        await script_locator.wait_for(timeout=60000)
+
+        # Extract the apolloState property from the window.appCache object
+        apollo_state = await page.evaluate("() => window.appCache.apolloState")
+
+        if not apollo_state:
+            logger.error("window.appCache.apolloState is not present in the script tag")
+            return None
+
+        overview = parse_overview(apollo_state)
+        reviews = parse_reviews(apollo_state)
+
         total_pages = overview["number_of_pages"]
 
         if max_pages and max_pages < total_pages:
@@ -325,6 +348,22 @@ async def scrape_data(
         for page_num in range(2, total_pages + 1):
             page_url = Url.change_page(url, page=page_num)
             await page.goto(page_url, timeout=120000)
+            script_locator = page.locator("body > script:nth-child(4)")
+            await script_locator.wait_for(timeout=60000)
+
+            # Check if the window.appCache object is present in the script
+            app_cache_present = await page.evaluate(
+                "() => !!window.appCache",  # This JavaScript code checks if window.appCache is defined
+                script_locator.first(),  # This is the element to execute the JavaScript code in
+            )
+
+            if not app_cache_present:
+                logger.error(
+                    "window.appCache is not present in the script tag on page %d",
+                    page_num,
+                )
+                continue  # Skip this page and move on to the next one
+
             result = await page.content()
 
             if result:  # Check if the page was successfully scraped
@@ -461,13 +500,14 @@ if __name__ == "__main__":
     overview, reviews = asyncio.run(
         scrape_data(
             Url.reviews(
-                "eBay Motors Group",
-                "4189745",
+                "NVIDIA",
+                "7633",
                 regions=[Region.UNITED_STATES, Region.CANADA_ENGLISH],
             ),
             max_pages=1,
         )
     )
+    print("\n\n")
     print("Overview:", overview)
     print("\n\n")
     print("Reviews:", reviews)
