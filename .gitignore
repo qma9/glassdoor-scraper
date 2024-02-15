@@ -24,7 +24,7 @@ log/log.jsonl*
 test/test_commands.sh
 
 # Scrap code
-scraper/scrap.py
+scraper/scrap
 
 # TODO list
 todo.md
@@ -37,3 +37,12 @@ mysql_commands.txt
 
 # reddit
 reddit.txt
+
+# Proxy testing
+scraper/proxy.py
+scraper/oxy_proxy.py
+scraper/response.json
+scraper/bd_support.txt
+
+# MySQL testing
+mysql_commands.txt

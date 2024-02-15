@@ -11,3 +11,7 @@ mysql-connector-python
 pytest
 pytest-cov
 graphviz
+lxml
+js2py
+graphql-core
+simplejson

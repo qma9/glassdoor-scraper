@@ -1,15 +1,19 @@
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
+import requests
+from graphql import parse, print_ast
+import simplejson as json
 
 from typing import Optional, Dict, Tuple, List
 from datetime import datetime
 from enum import Enum
-import json
+
+# import json
 import re
 import asyncio
 from dotenv import load_dotenv
 import sys
 import os
+import re
 
 # Load .env file
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -20,62 +24,92 @@ from log.setup import logger, setup_logging
 # Configure logging
 setup_logging()
 
-# Bright Data headless browser authentication credentials
-cred = {
-    "host": os.getenv("HOST"),
-    "username": os.getenv("USERNAME"),
-    "password": os.getenv("PASSWORD"),
-}
-auth = f'{cred["username"]}:{cred["password"]}'
-browser_url = f'wss://{auth}@{cred["host"]}'
 
+def get_apollostate(url: str) -> dict:
 
-def find_hidden_data(result: str) -> dict:
-    """
-    Extract hidden web cache (Apollo Graphql) from Glassdoor page HTML.
-    It's either in NEXT_DATA script or direct apolloState js variable.
+    # OxyLabs proxy crendetials
+    cred = {
+        "username": os.getenv("OXY_USERNAME"),
+        "password": os.getenv("OXY_PASSWORD"),
+    }
 
-    Args:
-        result (str): The HTML content of the Glassdoor page.
+    # Structure payload.
+    payload = {
+        "source": "universal",
+        "url": url,
+    }
 
-    Returns:
-        dict: The extracted hidden web cache data.
-
-    """
-    # Create a BeautifulSoup object from the response text
-    soup = BeautifulSoup(result, "html.parser")
-
-    # Find all script tags that contain the appCache data
-    script_tags = soup.find_all(
-        "script", string=lambda text: text is not None and "window.appCache" in text
+    # Get response.
+    response = requests.request(
+        "POST",
+        "https://realtime.oxylabs.io/v1/queries",
+        auth=(cred["username"], cred["password"]),
+        json=payload,
     )
 
-    data = {}
+    # Load the JSON string into dictionary
+    app_cache_json = json.loads(response.text)
 
-    for script_tag in script_tags:
-        # Extract the JavaScript code from the script tag
-        javascript_code = script_tag.string
+    # Parse the HTML with BeautifulSoup
+    soup = BeautifulSoup(app_cache_json["results"][0]["content"], "html.parser")
 
-        # Find the start and end of the appCache JSON object
-        start = javascript_code.find("window.appCache = ") + len("window.appCache = ")
-        end = javascript_code.find(
-            ";", start
-        )  # find the semicolon after the JSON object
+    # Find script tag that contains the apolloState object, should only be 1
+    script_tags = str(soup.find_all("script", string=re.compile("apolloState")))
 
-        # Extract the appCache JSON object
-        app_cache_json = javascript_code[start:end]
+    # Extract the apolloState object from the script tag
+    match = re.search('apolloState":({.*?})};</script>', script_tags, re.DOTALL)
+    apollostate = match.group(1)
 
-        # Parse the appCache JSON object
-        app_cache = json.loads(app_cache_json)
+    # Find all GraphQL queries in the JSON string
+    graphql_queries = re.findall(r'"[^"]*\({[^)]*}\)"', apollostate)
 
-        # Extract the apolloState data from the appCache
-        data.update(app_cache.get("apolloState", {}))
+    # Replace each GraphQL query with its string representation
+    query_to_string = {}
 
-    if not data:
-        logger.error(
-            f"No Apollo Graphql or window.appCache js variable found",
-            extra={"soup": soup.prettify()},
+    for query in graphql_queries:
+        # Extract the actual GraphQL query from the string
+        actual_query = re.search(r'(?<=")[^"]*(?=")', query).group()
+
+        # Extract the operation name from the actual query
+        operation_name = actual_query.split("(")[0].strip()
+
+        # Prepend the operation type and the operation name to the GraphQL operation
+        # Add a selection set for the operation
+        actual_query = f"query {{ {operation_name} {{ id }} }}"
+
+        # Parse the query into an AST
+        ast = parse(actual_query)
+
+        # Convert the AST back into a string
+        string = print_ast(ast)
+
+        # Remove the {}, \t, \n, \r, and space characters from the string
+        # Add the query and its string representation to the mapping
+        query_to_string[query] = (
+            string.replace("{", "")
+            .replace("}", "")
+            .replace("\t", "")
+            .replace("\n", "")
+            .replace("\r", "")
+            .replace(" ", "")
+            .strip()
         )
+
+    # Replace each GraphQL query with its string representation in the JSON string
+    for query, string in query_to_string.items():
+        # Enclose the string representation in double quotes to make it a valid JSON key
+        apollostate = apollostate.replace(query, f'"{string}"')
+
+    # Load the JSON string into a Python dictionary
+    # This will automatically remove duplicate keys
+    data = json.loads(apollostate)
+
+    # Convert the dictionary back into a JSON string
+    # This will create a new JSON object without duplicate keys
+    apollostate = json.dumps(data)
+
+    # Now can parse the JSON string without duplicate error
+    data = json.loads(apollostate)
 
     return data
 
@@ -301,83 +335,52 @@ async def scrape_data(
     """
     logger.info("scraping reviews from %s", url)
 
-    async with async_playwright() as pw:
-        browser = await pw.chromium.connect_over_cdp(browser_url)
-        page = await browser.new_page()
+    # Extract the apolloState property from the window.appCache object
+    apollo_state = get_apollostate(url)
 
-        # Only allow document requests
-        await page.route(
-            "**/*",
-            lambda route, request: (
-                route.continue_()
-                if request.resource_type == "document"
-                else route.abort()
-            ),
-        )
+    if not apollo_state:
+        logger.error("window.appCache.apolloState is not present in the script tag")
+        return None
 
-        # Navigate to the first page
-        await page.goto(url, timeout=120000)
+    overview = parse_overview(apollo_state)
+    reviews = parse_reviews(apollo_state)
 
-        # Create a locator for the script
-        script_locator = page.locator("body > script:nth-child(4)")
+    total_pages = overview["number_of_pages"]
 
-        # Wait for the script to load
-        await script_locator.wait_for(timeout=60000)
+    if max_pages and max_pages < total_pages:
+        total_pages = max_pages
 
-        # Extract the apolloState property from the window.appCache object
-        apollo_state = await page.evaluate("() => window.appCache.apolloState")
+    logger.info(
+        "scraped first page of reviews of %s, scraping remaining %d pages",
+        url,
+        total_pages - 1,
+    )
+
+    for page_num in range(2, total_pages + 1):
+        page_url = Url.change_page(url, page=page_num)
+
+        # Check if the window.appCache object is present in the script
+        apollo_state = get_apollostate(page_url)
 
         if not apollo_state:
-            logger.error("window.appCache.apolloState is not present in the script tag")
-            return None
-
-        overview = parse_overview(apollo_state)
-        reviews = parse_reviews(apollo_state)
-
-        total_pages = overview["number_of_pages"]
-
-        if max_pages and max_pages < total_pages:
-            total_pages = max_pages
-
-        logger.info(
-            "scraped first page of reviews of %s, scraping remaining %d pages",
-            url,
-            total_pages - 1,
-        )
-
-        for page_num in range(2, total_pages + 1):
-            page_url = Url.change_page(url, page=page_num)
-            await page.goto(page_url, timeout=120000)
-            script_locator = page.locator("body > script:nth-child(4)")
-            await script_locator.wait_for(timeout=60000)
-
-            # Check if the window.appCache object is present in the script
-            app_cache_present = await page.evaluate(
-                "() => !!window.appCache",  # This JavaScript code checks if window.appCache is defined
-                script_locator.first(),  # This is the element to execute the JavaScript code in
+            logger.error(
+                "window.appCache is not present in the script tag on page %d",
+                page_num,
             )
+            continue  # Skip this page and move on to the next one
 
-            if not app_cache_present:
-                logger.error(
-                    "window.appCache is not present in the script tag on page %d",
-                    page_num,
-                )
-                continue  # Skip this page and move on to the next one
+        if apollo_state:  # Check if the page was successfully scraped
+            new_reviews = parse_reviews(apollo_state)
+            reviews.update(new_reviews)
+        else:
+            logger.error("failed to scrape %s", page_url)
 
-            result = await page.content()
+        # Add a delay
+        await asyncio.sleep(1)
 
-            if result:  # Check if the page was successfully scraped
-                new_reviews = parse_reviews(result)
-                reviews.update(new_reviews)
-            else:
-                logger.error("failed to scrape %s", page_url)
-
-            # Add a delay
-            await asyncio.sleep(1)
-
-        logger.info(
-            "scraped %d reviews from %s in %d pages", len(reviews), url, total_pages
-        )
+    logger.info(
+        "scraped %d reviews from %s in %d pages", len(reviews), url, total_pages
+    )
 
     return overview, reviews
 
@@ -496,13 +499,12 @@ class Url:
 
 
 if __name__ == "__main__":
+
     # test script
     overview, reviews = asyncio.run(
         scrape_data(
             Url.reviews(
-                "NVIDIA",
-                "7633",
-                regions=[Region.UNITED_STATES, Region.CANADA_ENGLISH],
+                "NVIDIA", "7633", regions=[Region.UNITED_STATES, Region.CANADA_ENGLISH]
             ),
             max_pages=1,
         )
