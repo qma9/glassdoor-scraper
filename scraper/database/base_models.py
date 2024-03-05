@@ -29,24 +29,27 @@ class CompanyBase(BaseModel):
         business_outlook_rating (Optional[float]): The rating for business outlook.
     """
 
+    id: int
     employer_id: int
     employer_name: str
-    number_of_pages: Optional[int]
+    gvkey: int
+    id_not_found: Optional[bool] = False
+    number_of_pages: Optional[int] = None
 
-    all_reviews_count: Optional[int]
-    rated_reviews_count: Optional[int]
-    overall_rating: Optional[float]
-    ceo_name: Optional[str]
-    ceo_rating: Optional[float]
+    all_reviews_count: Optional[int] = None
+    rated_reviews_count: Optional[int] = None
+    overall_rating: Optional[float] = None
+    ceo_name: Optional[str] = None
+    ceo_rating: Optional[float] = None
 
-    recommend_to_friend_rating: Optional[float]
-    culture_and_values_rating: Optional[float]
-    diversity_and_inclusion_rating: Optional[float]
-    career_opportunities_rating: Optional[float]
-    work_life_balance_rating: Optional[float]
-    senior_management_rating: Optional[float]
-    compensation_and_benefits_rating: Optional[float]
-    business_outlook_rating: Optional[float]
+    recommend_to_friend_rating: Optional[float] = None
+    culture_and_values_rating: Optional[float] = None
+    diversity_and_inclusion_rating: Optional[float] = None
+    career_opportunities_rating: Optional[float] = None
+    work_life_balance_rating: Optional[float] = None
+    senior_management_rating: Optional[float] = None
+    compensation_and_benefits_rating: Optional[float] = None
+    business_outlook_rating: Optional[float] = None
 
 
 class ReviewBase(BaseModel):
@@ -95,32 +98,32 @@ class ReviewBase(BaseModel):
     date_time: datetime
     employer_id: int
 
-    rating_overall: Optional[int]
-    rating_ceo: Optional[str]
-    rating_business_outlook: Optional[str]
-    rating_work_life_balance: Optional[int]
-    rating_culture_and_values: Optional[int]
-    rating_diversity_and_inclusion: Optional[int]
-    rating_senior_leadership: Optional[int]
-    rating_recommend_to_friend: Optional[str]
-    rating_career_opportunities: Optional[int]
-    rating_compensation_and_benefits: Optional[int]
+    rating_overall: Optional[int] = None
+    rating_ceo: Optional[str] = None
+    rating_business_outlook: Optional[str] = None
+    rating_work_life_balance: Optional[int] = None
+    rating_culture_and_values: Optional[int] = None
+    rating_diversity_and_inclusion: Optional[int] = None
+    rating_senior_leadership: Optional[int] = None
+    rating_recommend_to_friend: Optional[str] = None
+    rating_career_opportunities: Optional[int] = None
+    rating_compensation_and_benefits: Optional[int] = None
 
-    is_current_job: Optional[bool]
-    length_of_employment: Optional[int]
-    employment_status: Optional[str]
-    job_ending_year: Optional[int]
-    job_title: Optional[str]
-    location: Optional[str]
+    is_current_job: Optional[bool] = None
+    length_of_employment: Optional[int] = None
+    employment_status: Optional[str] = None
+    job_ending_year: Optional[int] = None
+    job_title: Optional[str] = None
+    location: Optional[str] = None
 
-    pros: Optional[str]
-    cons: Optional[str]
-    summary: Optional[str]
-    advice: Optional[str]
+    pros: Optional[str] = None
+    cons: Optional[str] = None
+    summary: Optional[str] = None
+    advice: Optional[str] = None
 
-    count_helpful: Optional[int]
-    count_not_helpful: Optional[int]
-    is_covid19: Optional[bool]
+    count_helpful: Optional[int] = None
+    count_not_helpful: Optional[int] = None
+    is_covid19: Optional[bool] = None
 
     @property
     def review_text(self) -> str:
