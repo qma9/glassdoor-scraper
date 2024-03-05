@@ -1,99 +1,133 @@
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from pydantic import ValidationError
 
-import asyncio
 from typing import Tuple, List
+from time import process_time
+import asyncio
+import json
 
-from database.models import Company, Review
-from database.base_models import CompanyBase, ReviewBase
-from scraper.glassdoor import scrape_data, Region, Url
+from database import Company, Review, CompanyBase, ReviewBase, get_db
+from scraper.glassdoor import scrape_data
 from log.setup import logger, setup_logging
 
-# Setup logging
-setup_logging()
 
+async def main(session: Session) -> None:
+    lock = asyncio.Lock()
 
-def main(db: Session) -> None:
-    """
-    Scrape Glassdoor reviews.
+    def get_all_urls(session: Session) -> List[Tuple[int, str]]:
 
-    Args:
-        db (Session): The database session object
-
-    Returns:
-        None
-    """
-
-    def get_all_companies(db: Session) -> List[Tuple[int, str]]:
-        """
-        Get all companie id and names from the database.
-
-        Args:
-            db (Session): The database session object
-
-        Returns:
-            List[Tuple[int, str]]: A list of tuples containing company id and names
-        """
-        return db.query(Company.employer_name, Company.employer_id).all()
+        # Set to filter for public companies with a gvkey
+        return (
+            session.query(Company.url_new)
+            .filter(Company.is_gvkey == 1, Company.url_new.isnot(None))
+            .all()
+        )
 
     # Create a new event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    # Get all companies from the database
-    companies = get_all_companies(db)
+    with get_db() as session:
+        urls = get_all_urls(session)
 
-    for employer_name, employer_id in companies:
-        try:
-            overview_data, reviews_data = loop.run_until_complete(
-                scrape_data(
-                    Url.reviews(
-                        employer_name,
-                        employer_id,
-                        regions=[Region.UNITED_STATES, Region.CANADA_ENGLISH],
-                    )
-                )
-            )
-        except Exception as e:
-            logger.error(
-                f"Error scraping data for company {employer_name}: {e}",
-                extra={"employer_id": employer_id, "employer_name": employer_name},
-            )
-            continue  # Skip to the next company if there is an error
-
-        # Validate the data with CompanyBase
-        try:
-            valid_data = CompanyBase(**overview_data)
-        except ValidationError as e:
-            logger.error(f"Invalid data for company {employer_name}: {e}")
-            continue  # Skip to the next company if the data is invalid
-
-        # Fetch the existing company from the database
-        company = (
-            db.query(Company)
-            .filter(Company.employer_id == valid_data.employer_id)
-            .first()
-        )
-
-        # Update the company's fields with the new data
-        for key, value in valid_data.model_dump().items():
-            setattr(company, key, value)
-
-        db.commit()
-
-        # For each item in your scraped data...
-        for review in reviews_data:
-            # Validate the data with ReviewBase
+        for url in urls:
             try:
-                valid_review = ReviewBase(**review)
+                overview_data, reviews_data = loop.run_until_complete(scrape_data(url))
+            except (json.JSONDecodeError, KeyError, asyncio.TimeoutError) as e:
+                logger.error(
+                    f"Error scraping data: {e}",
+                    extra={"url": url},
+                )
+                continue  # Skip to the next company if there is an error
+
+            # Validate the data with CompanyBase
+            try:
+                valid_data = CompanyBase(**overview_data)
             except ValidationError as e:
-                logger.error(f"Invalid data for review: {e}")
-                continue  # Skip to the next review if the data is invalid
+                logger.error(
+                    f"Invalid data from {url}: {e}",
+                    extra={"overview": overview_data},
+                )
+                continue  # Skip to the next company if the data is invalid
+            try:
+                # Fetch the existing company from the database
+                company = (
+                    session.query(Company)
+                    .filter(Company.employer_id == valid_data.employer_id)
+                    .first()
+                )
 
-            # Create a new Review object with the validated data
-            observation = Review(**valid_review.model_dump())
-            # Add the new review to the session
-            db.add(observation)
+                # Update the company's fields with the new data
+                for key, value in valid_data.model_dump().items():
+                    setattr(company, key, value)
 
-        # Commit the session to save the changes to the database
-        db.commit()
+                session.commit()
+
+                # Initialize a counter
+                counter = 0
+
+                # For each item in your scraped data...
+                for review in reviews_data:
+                    # Validate the data with ReviewBase
+                    try:
+                        valid_review = ReviewBase(**review)
+                    except ValidationError as e:
+                        logger.error(
+                            f"Invalid data for review: {e}", extra={"review": review}
+                        )
+                        continue  # Skip to the next review if the data is invalid
+
+                    # Create a new Review object with the validated data
+                    observation = Review(**valid_review.model_dump())
+
+                    # Associate the review with the company
+                    observation.company = company
+
+                    # Add the new review to the session
+                    session.add(observation)
+
+                    # Increment the counter
+                    counter += 1
+
+                    # If the counter reaches 100, commit the session and reset the counter
+                    if counter >= 100:
+                        async with lock:
+                            session.commit()
+                        counter = 0
+
+                # Commit any remaining reviews that didn't reach the counter limit
+                if counter > 0:
+                    async with lock:
+                        session.commit()
+            except (IntegrityError, Exception) as e:
+                session.rollback()
+                logger.error(
+                    f"Error updating data: {e}",
+                    extra={"url": url},
+                )
+
+
+if __name__ == "__main__":
+
+    # Setup logging
+    listener = setup_logging()
+
+    # Start time
+    start_time = process_time()
+
+    # Run the main function
+    asyncio.run(main())
+
+    # End time
+    end_time = process_time()
+
+    # Log the time taken
+    logger.info(
+        f"Time taken: {end_time - start_time} seconds",
+        extra={"time": end_time - start_time},
+    )
+    print(f"Time taken: {end_time - start_time} seconds")
+
+    # Stop listener
+    listener.stop()

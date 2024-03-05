@@ -1,178 +1,200 @@
-from playwright.async_api import async_playwright
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
-from fastapi.testclient import TestClient
+from requests.exceptions import RequestException
 from sqlalchemy.orm import Session
-import pandas as pd
+from sqlalchemy.exc import IntegrityError
+from urllib.parse import quote
+import simplejson as json
+import requests
 
-from typing import Dict, Annotated, List
-import json
-import asyncio
+from typing import Dict
 from dotenv import load_dotenv
+from time import process_time
+import asyncio
 import os
 import sys
 
-from database.database import engine
-from database.models import Company
-from database.base_models import CompanyBase
-
 
 # Load .env file
-sys.path.append(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv()
 
-from utils import get_db, get_unique_companies
-from log.setup import logger, setup_logging
-
-# Configure logging
-setup_logging()
-
-# Create the Company table
-Company.__table__.create(bind=engine)
-
-# Create the FastAPI instance
-app = FastAPI()
-
-# Bright Data headless browser authentication credentials
-cred = {
-    "host": os.getenv("HOST"),
-    "username": os.getenv("USERNAME"),
-    "password": os.getenv("PASSWORD"),
-}
-auth = f'{cred["username"]}:{cred["password"]}'
-browser_url = f'wss://{auth}@{cred["host"]}'
-
-# Database dependency
-db_dependency = Annotated[Session, Depends(get_db)]
+from database import Company, get_db
+from log import logger, setup_logging
 
 
 async def find_company(query: str) -> Dict[str, str | int]:
-    """
-    Find company Glassdoor ID and name by query. e.g. "nvidia" will return "NVIDIA" with ID 7633.
 
-    Args:
-        query (str): The query string to search for a company.
+    global rate_limit_exceeded
 
-    Returns:
-        Dict[str, str | int]: A dictionary containing the Glassdoor ID and name of the company.
-    """
-    async with async_playwright() as pw:
-        browser = await pw.chromium.connect_over_cdp(browser_url)
-        page = await browser.new_page()
+    # You will have to change the request format based on the proxy service used
+    # Proxy crendetials
+    cred = {
+        "username": os.getenv("OXY_USERNAME"),
+        "password": os.getenv("OXY_PASSWORD"),
+    }
 
-        # Abort unnecessary requests
-        await page.route(
-            "**/*",
-            lambda route, request: route.continue_()
-            if request.resource_type == "document"
-            else route.abort(),
-        )
-        # Navigate to the search page
-        await page.goto(
-            f"https://www.glassdoor.com/searchsuggest/typeahead?numSuggestions=8&source=GD_V2&version=NEW&rf=full&fallback=token&input={query}",
-            timeout=120000,
-        )
-        search_page = await page.content()
+    # Structure payload.
+    payload = {
+        "source": "universal",
+        "url": f"https://www.glassdoor.com/searchsuggest/typeahead?numSuggestions=8&source=GD_V2&version=NEW&rf=full&fallback=token&input={quote(query)}",
+    }
 
-        data = json.loads(search_page)
-
-        # Add a short pause
-        await asyncio.sleep(1)
-
-    if not data:
-        logger.error(f"No search results for company {query} on Glassdoor")
-        raise HTTPException(
-            status_code=404,
-            detail=f"No search results for company {query} on Glassdoor",
-        )
-    elif data[0]["category"] == "company" or data[0]["category"] == "multicat":
-        return {
-            "employer_id": data[0]["employerId"],
-            "employer_name": data[0]["suggestion"],
-        }
-    else:
-        logger.error(f"Unexpected data for company {query} on Glassdoor: {data}")
-        raise HTTPException(
-            status_code=404, detail=f"Unexpected data for company {query} on Glassdoor"
-        )
-
-
-async def add_company_to_db(company_name: str, db: Session) -> None:
-    """
-    Add company_id and company_name to company table.
-
-    Args:
-        company_name (str): The name of the company to add to the database.
-        db (Session): The database session.
-
-    Raises:
-        HTTPException: If the data for the company is invalid.
-
-    Returns:
-        None
-    """
-    company_data = await find_company(company_name)
-
-    # Validate the data with CompanyBase
     try:
-        valid_data = CompanyBase.model_validate(company_data)
-    except Exception as e:
-        logger.error(f"Invalid data for company {company_name}: {e}")
-        raise HTTPException(
-            status_code=400, detail=f"Invalid data for company {company_name}: {e}"
+        # Get response.
+        response = requests.request(
+            "POST",
+            "https://realtime.oxylabs.io/v1/queries",
+            auth=(cred["username"], cred["password"]),
+            json=payload,
         )
 
-    observation = Company(**valid_data.model_dump())
-    db.add(observation)
-    db.commit()
+        ########################### TESTING ###########################
+        # Check response format, will changed based on proxy service used
+        # print(f"\nRequest URL: {response.url}\nPayload: {payload}")
+        # print(
+        #     f"\nResponse status: {response.status_code}\nHeaders: {response.headers}\nBody: {response.text}"
+        # )
+
+        # Check if the status code is 429
+        if response.status_code == 429:
+            logger.error(f"Exceeded proxy network rate limit: {response.status_code}")
+            rate_limit_exceeded = True  # Set the flag
+            return  # Stop the task
+
+        # Check if the status code is not 200
+        if response.status_code != 200:
+            logger.error(f"Unexpected status code: {response.status_code}")
+            return  # Stop the task
+
+    except RequestException as e:
+        raise Exception(f"Request error to Glassdoor: {e}")
+
+    # Load the JSON string into dictionary
+    response_json = json.loads(response.text)
+
+    # TESTING
+    # print(f"\nResponse JSON:\n{response_json}\n")
+
+    # Load content from the response
+    suggestions = json.loads(response_json["results"][0]["content"])
+
+    # Filter the suggestions to only include those with category as company or multicat
+    company_suggestions = [
+        suggestion
+        for suggestion in suggestions
+        if suggestion["category"] in ["company", "multicat"]
+    ]
+
+    # If there are no company suggestions, raise an exception
+    if not company_suggestions:
+        logger.error(f"No search results on Glassdoor: {query}")
+        return None
+
+    # Select the suggestion with the highest confidence value
+    best_match = max(
+        company_suggestions, key=lambda suggestion: suggestion["confidence"]
+    )
+
+    # Check if employer_name is None or an empty string
+    if not best_match["suggestion"]:
+        logger.error(f"Employer name not found: {query}")
+        return None
+
+    return {
+        "employer_id": best_match["employerId"],
+        "employer_name": best_match["suggestion"],
+    }
 
 
-@app.post("/companies/")
-def find_all_companies(
-    background_tasks: BackgroundTasks, companies: List[str], db: Session = db_dependency
-) -> Dict[str, str]:
-    """
-    Endpoint to scrape company ids and names on Glassdoor and add them to company table.
+async def add_company_to_db(company_name: str, db: Session, lock: asyncio.Lock) -> None:
 
-    Args:
-        background_tasks (BackgroundTasks): BackgroundTasks object to handle asynchronous tasks.
-        companies (List[str]): List of company names to be added to the database.
-        db (Session, optional): Database session object. Defaults to db_dependency.
+    global rate_limit_exceeded
+    # Check the flag before sending a request
+    if rate_limit_exceeded:
+        return
 
-    Returns:
-        dict: A dictionary with a message indicating the completion of scraping and addition of company details to the database.
-    """
-    for company in companies:
+    async with lock:
+        company_data = await find_company(company_name)
+
+        # Check if a company with the same employer_name already exists
+        existing_company = (
+            db.query(Company).filter_by(employer_name=company_name).first()
+        )
+
+        if company_data is None:
+            if existing_company:
+                existing_company.id_not_found = True
+                db.commit()
+            return
+        elif company_data == {}:
+            return
+
+        if existing_company is not None:
+            # If it does, update the existing company
+            for key, value in company_data.items():
+                setattr(existing_company, key, value)
+        else:
+            # If it doesn't, add a new company
+            observation = Company(**company_data)
+            db.add(observation)
+
         try:
-            background_tasks.add_task(add_company_to_db, company, db)
+            db.commit()
+            logger.info(f"Successfully added company to database: {company_name}")
+        except IntegrityError as e:
+            db.rollback()
+            logger.error(f"Error for database commit: {company_name}, {str(e.orig)}")
         except Exception as e:
-            # Log the error and the company name
-            logger.error(
-                f"An error occurred while adding {company} to the database: {e}"
-            )
-            continue
-
-    logger.info("Scraping complete, company id and name added to the database")
-    return {"message": "Scraping complete, company id and name added to the database"}
+            db.rollback()
+            logger.error(f"Error for database commit: {company_name}, {e}")
 
 
-# Load companies
-df = pd.read_csv(os.getenv("COMPANY_NAMES"))
+async def find_all_companies(db: Session, lock: asyncio.Lock) -> Dict[str, str]:
 
-# Keep the observation with the lowest tier for each gvkey
-df_unique = get_unique_companies(df)
+    # Query the Company table
+    companies = db.query(Company).all()
 
-# Convert query column to a list
-companies = df_unique["employer"].tolist()
+    async def add_company_with_error_handling(
+        company: Company, db: Session, lock: asyncio.Lock
+    ) -> None:
+        try:
+            await add_company_to_db(company.employer_name, db, lock)
+        except Exception as e:
+            logger.error(f"Error adding to database: {company.employer_name}, {e}")
+
+    tasks = []
+    for company in companies:
+        # Skip companies that were not found in a previous run
+        if company.id_not_found != 1:
+            tasks.append(add_company_with_error_handling(company, db, lock))
+
+    await asyncio.gather(*tasks)
+
+    logger.info("Scraping complete, employer id and name added to the database")
+    return {"message": "Scraping complete, employer id added to the database"}
 
 
 if __name__ == "__main__":
-    # Create a TestClient instance
-    client = TestClient(app)
+    # Configure logging
+    listener = setup_logging()
 
-    # Send a POST request to the "/companies/" endpoint
-    response = client.post("/companies/", json={"companies": companies})
+    # Create a lock to be used in the async function
+    lock = asyncio.Lock()
 
-    # Print the response
-    print(response.json())
+    # Initialize the rate_limit_exceeded flag
+    rate_limit_exceeded = False
+
+    # Start time
+    start_time = process_time()
+
+    # Get a database session
+    with get_db() as db:
+        asyncio.run(find_all_companies(db, lock))
+
+    # End time
+    end_time = process_time()
+
+    # Print the time
+    print(f"\nTime: {end_time - start_time} seconds\n")
+
+    # # Stop the listener
+    listener.stop()

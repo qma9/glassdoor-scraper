@@ -1,6 +1,6 @@
+from graphql import parse, print_ast
 from bs4 import BeautifulSoup
 import requests
-from graphql import parse, print_ast
 import simplejson as json
 
 from typing import Optional, Dict, Tuple, List
@@ -22,46 +22,66 @@ load_dotenv()
 from log.setup import logger, setup_logging
 
 # Configure logging
-setup_logging()
+listener = setup_logging()
 
 
-def get_apollostate(url: str) -> dict:
+def get_apollocache(url: str) -> dict:
 
-    # OxyLabs proxy crendetials
     cred = {
-        "username": os.getenv("OXY_USERNAME"),
-        "password": os.getenv("OXY_PASSWORD"),
+        "username": os.getenv("SMART_USERNAME"),
+        "password": os.getenv("SMART_PASSWORD"),
     }
 
-    # Structure payload.
-    payload = {
-        "source": "universal",
-        "url": url,
+    proxies = {
+        "http": f'http://{cred["username"]}:{cred["password"]}@unblock.smartproxy.com:60000',
+        "https": f'http://{cred["username"]}:{cred["password"]}@unblock.smartproxy.com:60000',
     }
 
-    # Get response.
-    response = requests.request(
-        "POST",
-        "https://realtime.oxylabs.io/v1/queries",
-        auth=(cred["username"], cred["password"]),
-        json=payload,
-    )
+    # headers = {"X-SU-Geo": "United States"}
+
+    response = requests.request("GET", url, verify=False, proxies=proxies)
+
+    # TESTING
+    print(f"\nURL: {url}\n")
+
+    # TESTING
+    with open("scraper/structure/zen_response.txt", "w") as f:
+        f.write(response.text)
 
     # Load the JSON string into dictionary
-    app_cache_json = json.loads(response.text)
+    # app_cache_json = json.loads(response.text)
 
     # Parse the HTML with BeautifulSoup
-    soup = BeautifulSoup(app_cache_json["results"][0]["content"], "html.parser")
+    # soup = BeautifulSoup(app_cache_json["results"][0]["content"], "html.parser")
+    soup = BeautifulSoup(response.text, "html.parser")
 
-    # Find script tag that contains the apolloState object, should only be 1
-    script_tags = str(soup.find_all("script", string=re.compile("apolloState")))
+    try:
+        # Find script tag that contains the apolloCache object
+        script_tag = soup.find("script", {"id": "__NEXT_DATA__"})
 
-    # Extract the apolloState object from the script tag
-    match = re.search('apolloState":({.*?})};</script>', script_tags, re.DOTALL)
-    apollostate = match.group(1)
+        if script_tag:
+            # Extract the JSON string from the script tag
+            apollo_cache_str = script_tag.string
+        else:
+            # Find script tag that contains the apolloState object
+            script_tag = soup.find("script", string=re.compile("apolloState"))
+            if script_tag:
+                # Extract the apolloState object from the script tag
+                match = re.search(
+                    'apolloState":({.*?})};</script>', str(script_tag), re.DOTALL
+                )  # added ( at neginning of apollostate and str() around script_tag
+                if match:
+                    apollo_cache_str = match.group(1)
+                else:
+                    raise ValueError("No apolloState object found in script tag")
+            else:
+                raise ValueError("No script tag with apolloState found")
+    except ValueError as e:
+        print(f"Error: {e}")
+        # Handle the error as needed
 
     # Find all GraphQL queries in the JSON string
-    graphql_queries = re.findall(r'"[^"]*\({[^)]*}\)"', apollostate)
+    graphql_queries = re.findall(r'"[^"]*\({[^)]*}\)"', apollo_cache_str)
 
     # Replace each GraphQL query with its string representation
     query_to_string = {}
@@ -86,7 +106,8 @@ def get_apollostate(url: str) -> dict:
         # Remove the {}, \t, \n, \r, and space characters from the string
         # Add the query and its string representation to the mapping
         query_to_string[query] = (
-            string.replace("{", "")
+            string.replace("query", "")
+            .replace("{", "")
             .replace("}", "")
             .replace("\t", "")
             .replace("\n", "")
@@ -98,67 +119,76 @@ def get_apollostate(url: str) -> dict:
     # Replace each GraphQL query with its string representation in the JSON string
     for query, string in query_to_string.items():
         # Enclose the string representation in double quotes to make it a valid JSON key
-        apollostate = apollostate.replace(query, f'"{string}"')
+        apollo_cache_str = apollo_cache_str.replace(query, f'"{string}"')
 
-    # Load the JSON string into a Python dictionary
-    # This will automatically remove duplicate keys
-    data = json.loads(apollostate)
+    # TESTING
+    with open("scraper/structure/apollo_cache_str.json", "w") as f:
+        apollo_cache_str_json = json.loads(apollo_cache_str)
+        f.write(json.dumps(apollo_cache_str_json, indent=4))
 
-    # Convert the dictionary back into a JSON string
-    # This will create a new JSON object without duplicate keys
-    apollostate = json.dumps(data)
+    if "apolloCache" in apollo_cache_str:
+        # Load the JSON string into a Python dictionary
+        data = json.loads(apollo_cache_str)
 
-    # Now can parse the JSON string without duplicate error
-    data = json.loads(apollostate)
-
-    return data
-
-
-def parse_overview(apollo_state: str) -> Dict[str, str | int]:
-    """
-    Parse overview from Glassdoor page HTML.
-
-    Args:
-        result (str): The HTML content of the Glassdoor page.
-
-    Returns:
-        Dict[str, str | int]: A dictionary containing the parsed overview data.
-
-    """
-    overview_data = {}
-    cache = apollo_state  # find_hidden_data(result)
-    if not cache:
-        logger.error(f"No hidden data found in Glassdoor page html")
+        # Access the apolloCache object from the dictionary
+        apollo_cache = data["props"]["pageProps"]["apolloCache"]
     else:
-        try:
-            root_query = cache["ROOT_QUERY"]
-            overview_data = next(
-                (
-                    value
-                    for key, value in root_query.items()
-                    if key.startswith("employerReviewsRG")
-                    and isinstance(value, dict)
-                    and value.get("__typename") == "EmployerReviewsRG"
-                ),
-                {},
-            )
-        except KeyError:
-            logger.error(f"ROOT_QUERY key not found in cache")
+        # This will automatically remove duplicate keys
+        data = json.loads(apollo_cache_str)
+
+        # Convert the dictionary back into a JSON string
+        # This will create a new JSON object without duplicate keys
+        apollo_str_temp = json.dumps(data)
+
+        # Now can parse the JSON string without duplicate error
+        apollo_cache = json.loads(apollo_str_temp)
+
+    # TESTING
+    with open("scraper/structure/apollo_cache.json", "w") as f:
+        f.write(json.dumps(apollo_cache, indent=4))
+
+    return apollo_cache
+
+
+def parse_overview(apollo_cache: dict) -> Dict[str, str | int]:
+
+    overview_data = {}
+
+    try:
+        root_query = apollo_cache["ROOT_QUERY"]
+        overview_data = next(
+            (
+                value
+                for key, value in root_query.items()
+                if key.startswith("employerReviewsRG")
+                and isinstance(value, dict)
+                and value.get("__typename") == "EmployerReviewsRG"
+            ),
+            {},
+        )
+    except KeyError as e:
+        logger.error(f"ROOT_QUERY key not found in cache: {e}")
+
+    ceo_name = None
+    for key, value in root_query.items():
+        if key.startswith("Ceo:") and isinstance(value, dict):
+            ceo_name = value.get("name")
+            break
 
     try:
         # Extract company overview information
         overview = {
-            "employer_id": int(
-                overview_data["employer"]["__ref"].split(":")[1]
+            "employer_id": (
+                int(overview_data["employerid"]["__ref"].split(":")[1])
                 if "employer" in overview_data
                 else None
-            ),  # comment out later once all companies are retrieved
-            # "employer_name": overview_data["employer"]["name"],
+            ),
             "number_of_pages": overview_data["numberOfPages"],
             "all_reviews_count": overview_data["allReviewsCount"],
             "rated_reviews_count": overview_data["ratedReviewsCount"],
             "overall_rating": overview_data["ratings"]["overallRating"],
-            "ceo_name": (
+            "ceo_name": ceo_name
+            or (
                 overview_data["ratings"]["ratedCeo"]["name"]
                 if overview_data["ratings"]["ratedCeo"] is not None
                 and "name" in overview_data["ratings"]["ratedCeo"]
@@ -190,52 +220,38 @@ def parse_overview(apollo_state: str) -> Dict[str, str | int]:
                 "businessOutlookRating"
             ],
         }
-
     except KeyError as e:
-        logger.error(f"Key {e} not found in overview_data")
-        raise
+        logger.error(
+            f"Key not found in overview data: {e}", extra={"overview": overview_data}
+        )
+        return None
 
     return overview
 
 
-def parse_reviews(apollo_state: str) -> Dict[str, Dict[str, str | int]]:
-    """
-    Parse data from Glassdoor page HTML.
+def parse_reviews(apollo_cache: dict) -> Dict[str, Dict[str, str | int]]:
 
-    Args:
-        result (str): The HTML content of the Glassdoor page.
-
-    Returns:
-        Dict[str, Dict[str, str | int]]: A dictionary containing parsed review data.
-            The keys are review IDs and the values are dictionaries containing
-            various attributes of the review, such as review ID, employer ID,
-            date and time, ratings, job details, location, pros and cons, etc.
-    """
-    cache = apollo_state  # find_hidden_data(result)
-    if not cache:
-        logger.error(f"No hidden data found in Glassdoor page html")
-    else:
-        try:
-            root_query = cache["ROOT_QUERY"]
-            reviews_data = next(
-                (
-                    value["reviews"]
-                    for key, value in root_query.items()
-                    if key.startswith("employerReviewsRG")
-                    and isinstance(value, dict)
-                    and value.get("__typename") == "EmployerReviewsRG"
-                    and "reviews" in value
-                ),
-                [],
-            )
-        except KeyError:
-            logger.error(f"ROOT_QUERY key not found in cache")
+    try:
+        root_query = apollo_cache["ROOT_QUERY"]
+        reviews_data = next(
+            (
+                value["reviews"]
+                for key, value in root_query.items()
+                if key.startswith("employerReviewsRG")
+                and isinstance(value, dict)
+                and value.get("__typename") == "EmployerReviewsRG"
+                and "reviews" in value
+            ),
+            [],
+        )
+    except KeyError:
+        logger.error(f"ROOT_QUERY key not found in cache")
 
     try:
         # Extract city and job title names
         city_job_title = {
             key: value
-            for key, value in cache.items()
+            for key, value in apollo_cache.items()
             if key.startswith(("City", "JobTitle"))
         }
     except KeyError as e:
@@ -248,7 +264,6 @@ def parse_reviews(apollo_state: str) -> Dict[str, Dict[str, str | int]]:
         for review in reviews_data:
             extracted_review = {
                 "review_id": review["reviewId"],
-                "employer_id": int(review["employer"]["__ref"].split(":")[1]),
                 "date_time": datetime.fromisoformat(
                     review["reviewDateTime"].replace("T", " ")
                 ),
@@ -314,7 +329,7 @@ def parse_reviews(apollo_state: str) -> Dict[str, Dict[str, str | int]]:
             reviews[review["reviewId"]] = extracted_review
 
     except KeyError as e:
-        logger.error(f"Key {e} not found in review", extra={"review": review})
+        logger.error(f"Key not found in review data: {e}", extra={"review": review})
         raise
 
     return reviews
@@ -323,27 +338,24 @@ def parse_reviews(apollo_state: str) -> Dict[str, Dict[str, str | int]]:
 async def scrape_data(
     url: str, max_pages: Optional[int] = None
 ) -> Tuple[Dict[str, int | float], Dict[str, Dict[str, str | int]]] | None:
-    """Scrape Glassdoor reviews listings from reviews pages (with pagination).
 
-    Args:
-        url (str): The URL of the reviews page to scrape.
-        max_pages (Optional[int], optional): The maximum number of pages to scrape. Defaults to None.
+    logger.info(f"Scraping reviews from {url}")
 
-    Returns:
-        Tuple[Dict[str, int | float], Dict[str, Dict[str, str | int]]]: A tuple containing the overview information and the scraped reviews.
+    # Extract the apollocache property from __NEXT_DATA__ script tag
+    apollo_cache = get_apollocache(url)
 
-    """
-    logger.info("scraping reviews from %s", url)
-
-    # Extract the apolloState property from the window.appCache object
-    apollo_state = get_apollostate(url)
-
-    if not apollo_state:
-        logger.error("window.appCache.apolloState is not present in the script tag")
+    if not apollo_cache:
+        logger.error("No data found in apollocache. Exiting.")
         return None
 
-    overview = parse_overview(apollo_state)
-    reviews = parse_reviews(apollo_state)
+    overview = parse_overview(apollo_cache)
+    reviews = parse_reviews(apollo_cache)
+
+    # TESTING ###################################################
+    with open("scraper/structure/overview.json", "w") as f:
+        f.write(json.dumps(overview, indent=4))
+    with open("scraper/structure/reviews.json", "w") as f:
+        f.write(json.dumps(reviews, indent=4))
 
     total_pages = overview["number_of_pages"]
 
@@ -351,35 +363,30 @@ async def scrape_data(
         total_pages = max_pages
 
     logger.info(
-        "scraped first page of reviews of %s, scraping remaining %d pages",
-        url,
-        total_pages - 1,
+        f"Scraped first reviews page of {url}, scraping remaining {total_pages - 1} pages"
     )
 
     for page_num in range(2, total_pages + 1):
         page_url = Url.change_page(url, page=page_num)
 
-        # Check if the window.appCache object is present in the script
-        apollo_state = get_apollostate(page_url)
+        # Extract the apollocache property from __NEXT_DATA__ script tag
+        apollo_cache = get_apollocache(page_url)
 
-        if not apollo_state:
-            logger.error(
-                "window.appCache is not present in the script tag on page %d",
-                page_num,
-            )
+        if not apollo_cache:
+            logger.error(f"No data in apollocache on page {page_num}")
             continue  # Skip this page and move on to the next one
 
-        if apollo_state:  # Check if the page was successfully scraped
-            new_reviews = parse_reviews(apollo_state)
+        if apollo_cache:  # Check if the page was successfully scraped
+            new_reviews = parse_reviews(apollo_cache)
             reviews.update(new_reviews)
         else:
-            logger.error("failed to scrape %s", page_url)
+            logger.error(f"Failed to scrape reviews on page {page_num}, {page_url}")
 
         # Add a delay
         await asyncio.sleep(1)
 
     logger.info(
-        "scraped %d reviews from %s in %d pages", len(reviews), url, total_pages
+        f"Scraping complete for {len(reviews)} reviews from {url} in {total_pages} pages"
     )
 
     return overview, reviews
@@ -498,14 +505,15 @@ class Url:
         return new
 
 
+# Stop the listener
+listener.stop()
+
 if __name__ == "__main__":
 
     # test script
     overview, reviews = asyncio.run(
         scrape_data(
-            Url.reviews(
-                "NVIDIA", "7633", regions=[Region.UNITED_STATES, Region.CANADA_ENGLISH]
-            ),
+            Url.reviews("NVIDIA", "7633"),
             max_pages=1,
         )
     )
