@@ -10,8 +10,10 @@ numpy
 mysql-connector-python
 pytest
 pytest-cov
+pytest-env
 graphviz
 lxml
 js2py
 graphql-core
 simplejson
+httpx

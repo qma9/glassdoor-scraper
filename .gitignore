@@ -1,7 +1,5 @@
 # pycache
-__pycache__/
-scraper/__pycache__/
-logging/__pycache__/
+**/__pycache__/
 
 # Environment variables
 .env
@@ -10,39 +8,27 @@ logging/__pycache__/
 .venv
 
 # Company matching data
-scraper/data
+**/data
+temp/
+**/glassdoor_query.py
 
-# Structure files for development
-scraper/structure
+# Structure files
+**/structure
 
 # Log files
-logfile.log
-log.jsonl*
-log/log.jsonl*  
+**/log.jsonl*
 
-# Testing commands
-test/test_commands.sh
+# Testing
+test/
+pyproject.toml
+.pytest_cache/
 
 # Scrap code
-scraper/scrap
+**/scrap
 
 # TODO list
 todo.md
 
-# Unique_companies
-unique_companies.py
+# Database output
+output/
 
-# mysql commands
-mysql_commands.txt
-
-# reddit
-reddit.txt
-
-# Proxy testing
-scraper/proxy.py
-scraper/oxy_proxy.py
-scraper/response.json
-scraper/bd_support.txt
-
-# MySQL testing
-mysql_commands.txt
