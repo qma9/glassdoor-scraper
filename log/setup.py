@@ -33,13 +33,6 @@ def setup_logging():
     root_logger = logging.getLogger()
     handlers = root_logger.handlers
 
-    # Create a QueueListener with the handlers
-    listener = logging.handlers.QueueListener(log_queue, *handlers)
-    listener.start()
-
-    # Register the stop method of the listener to be called when the program is exiting
-    atexit.register(listener.stop)
-
     # Replace the handlers in the root logger with the QueueHandler
     queue_handler = [
         handler
@@ -47,6 +40,12 @@ def setup_logging():
         if isinstance(handler, logging.handlers.QueueHandler)
     ][0]
     root_logger.handlers = [queue_handler]
+
+    # Create a QueueListener with the handlers
+    listener = logging.handlers.QueueListener(log_queue, *handlers)
+    listener.start()
+
+    return listener
 
 
 def main():
