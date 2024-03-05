@@ -19,18 +19,15 @@ dot.attr(
 dot.attr("edge", color="lightgrey", fontcolor="lightgrey")
 
 # Add nodes
-dot.node("API Post Endpoints", shape="box")
-dot.node("companies/")
-dot.node("glassdoor/")
+dot.node("scraper/companies.py")
+dot.node("scraper/main.py")
 dot.node("Scraper")
-dot.node("MySQL Database")
+dot.node("SQLite Database", shape="box")
 
 # Add edges
-dot.edge("API Post Endpoints", "companies/", label="run first")
-dot.edge("API Post Endpoints", "glassdoor/", label="run second")
-dot.edge("companies/", "Scraper", label="triggers")
-dot.edge("glassdoor/", "Scraper", label="triggers")
-dot.edge("Scraper", "MySQL Database", label="updates")
+dot.edge("scraper/companies.py", "Scraper", label="run first")
+dot.edge("scraper/main.py", "Scraper", label="run second")
+dot.edge("Scraper", "SQLite Database", label="updates")
 
 # Save the source to a file
 dot.save("design/design.dot")

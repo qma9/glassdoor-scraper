@@ -2,14 +2,11 @@ digraph {
 	bgcolor=black
 	node [color=lightgrey fillcolor=darkblue fontcolor=lightgrey style=filled]
 	edge [color=lightgrey fontcolor=lightgrey]
-	"API Post Endpoints" [shape=box]
-	"companies/"
-	"glassdoor/"
+	"scraper/companies.py"
+	"scraper/main.py"
 	Scraper
-	"MySQL Database"
-	"API Post Endpoints" -> "companies/" [label="run first"]
-	"API Post Endpoints" -> "glassdoor/" [label="run second"]
-	"companies/" -> Scraper [label=triggers]
-	"glassdoor/" -> Scraper [label=triggers]
-	Scraper -> "MySQL Database" [label=updates]
+	"SQLite Database" [shape=box]
+	"scraper/companies.py" -> Scraper [label="run first"]
+	"scraper/main.py" -> Scraper [label="run second"]
+	Scraper -> "SQLite Database" [label=updates]
 }
