@@ -32,3 +32,5 @@ todo.md
 # Database output
 output/
 
+# scrap code
+scraper/scrap.py
