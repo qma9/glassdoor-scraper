@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import ValidationError
 
 from typing import Tuple, List
-from time import process_time
+from time import process_time 
 import asyncio
 import json
 
@@ -16,16 +16,23 @@ async def main(session: Session) -> None:
     lock = asyncio.Lock()
 
     def get_all_urls(session: Session) -> List[Tuple[int, str]]:
+        """
+        Retrieves list of company Glassdoor URLs from database.
 
-        # Set to filter for public companies with a gvkey
+        Args:
+            session (Session): The database session.
+
+        Returns:
+            List[Tuple[int, str]]: A list of tuples containing the gvkey and URL for each company.
+        """
         return (
             session.query(Company.url_new)
-            .filter(Company.is_gvkey == 1, Company.url_new.isnot(None))
+            .filter(Company.is_gvkey == 1, Company.url_new.isnot(None), Company.ticker.isnot(None))
             .all()
         )
 
     # Create a new event loop
-    loop = asyncio.new_event_loop()
+    loop = asyncio.new_event_loop() 
     asyncio.set_event_loop(loop)
 
     with get_db() as session:
@@ -33,8 +40,8 @@ async def main(session: Session) -> None:
 
         for url in urls:
             try:
-                overview_data, reviews_data = loop.run_until_complete(scrape_data(url))
-            except (json.JSONDecodeError, KeyError, asyncio.TimeoutError) as e:
+                overview_data, reviews_data = loop.run_until_complete(scrape_data(url))  # can add max_pages if want to limit number of reviews from a single company
+            except (json.JSONDecodeError, KeyError, asyncio.TimeoutError) as e:          # fyi 10 reviews per page
                 logger.error(
                     f"Error scraping data: {e}",
                     extra={"url": url},
@@ -68,7 +75,7 @@ async def main(session: Session) -> None:
                 counter = 0
 
                 # For each item in your scraped data...
-                for review in reviews_data:
+                for review in reviews_data.values():  
                     # Validate the data with ReviewBase
                     try:
                         valid_review = ReviewBase(**review)
@@ -104,7 +111,7 @@ async def main(session: Session) -> None:
                 session.rollback()
                 logger.error(
                     f"Error updating data: {e}",
-                    extra={"url": url},
+                    extra={"url": url}, 
                 )
 
 
@@ -124,7 +131,7 @@ if __name__ == "__main__":
 
     # Log the time taken
     logger.info(
-        f"Time taken: {end_time - start_time} seconds",
+        f"Scraping complete, time taken: {end_time - start_time} seconds",
         extra={"time": end_time - start_time},
     )
     print(f"Time taken: {end_time - start_time} seconds")
