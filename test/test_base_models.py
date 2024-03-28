@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from database.base_models import ReviewBase
+from scraper.database.base_models import ReviewBase
 
 
 def test_review_base_init():

@@ -1,4 +1,4 @@
-from database.models import Review
+from scraper.database.models import Review
 
 
 def test_review_init():
