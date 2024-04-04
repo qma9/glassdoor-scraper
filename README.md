@@ -48,6 +48,8 @@ The rates for these services vary, some charge per GB and some charge per CPM (1
 
 Then fill the `employer_name` field in `Company` table with company names to be scraped.
 
+**Note:** There is an example script for creating `Company` table found at `scraper/create_company.py`. However, this file must be adapted to fit the user's previous data. The general idea is to read a file that contains company names of interest and fill `employer_name` field with them. The `get_unique_companies()` can be removed since it fits to a very specific use case of matched data using URLs. Ensure that the column name for company names matches `employer_name` in whatever data file is being read as a pandas dataframe.
+
 
 1. First run:
 
@@ -59,7 +61,7 @@ This will fill `employer_id` field in company table. Both `employer_id` and `emp
 
 2. Second run:
 
-**Note**: Modify the query database filter in `get_all_urls` to include only `Company.url_new.isnot(None)`. Other logic was used to filter for publicly traded North American companies with gvkeys and tickers from a larger database of private and public companies.
+**Note**: Modify the query database filter in `get_all_urls()` to include only `Company.url_new.isnot(None)`. Other logic was used to filter for publicly traded North American companies with gvkeys and tickers from a larger database of private and public companies.
 
 ```bash
 python scraper/main.py
