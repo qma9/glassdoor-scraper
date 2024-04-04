@@ -1,0 +1,12 @@
+digraph {
+	bgcolor=black
+	node [color=lightgrey fillcolor=darkblue fontcolor=lightgrey style=filled]
+	edge [color=lightgrey fontcolor=lightgrey]
+	"scraper/companies.py"
+	"scraper/main.py"
+	Scraper
+	"SQLite Database" [shape=box]
+	"scraper/companies.py" -> Scraper [label="run first"]
+	"scraper/main.py" -> Scraper [label="run second"]
+	Scraper -> "SQLite Database" [label=updates]
+}
