@@ -8,7 +8,7 @@ from time import process_time
 import asyncio
 import json
 
-from database import Company, Review, CompanyBase, ReviewBase, get_db, engine, Base
+from database import Company, Review, CompanyBase, ReviewBase, get_db, engine
 from glassdoor import scrape_data  # play with relative imports
 from log.setup import logger, setup_logging
 
@@ -27,7 +27,7 @@ async def main() -> None:
         Returns:
             List[Tuple[int, str]]: A list of tuples containing the gvkey and URL for each company.
         """
-        # Testing 
+        ############# Testing #############
         ticker_to_ids = {
             'MSFT': 1651, 
             'AAPL': 1138, 
@@ -39,10 +39,10 @@ async def main() -> None:
         }
         return (
             session.query(Company.url_new)
-            .filter(Company.is_gvkey == 1, 
+            .filter(Company.is_gvkey == 1,           # Edit filter for user needs
                     Company.url_new.isnot(None), 
                     Company.ticker.isnot(None),
-                    Company.employer_id.in_(ticker_to_ids.values())  # testing
+                    Company.employer_id.in_(ticker_to_ids.values())  # Remove for production 
             )
             .all()
         )
