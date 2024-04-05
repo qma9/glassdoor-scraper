@@ -64,7 +64,7 @@ def get_apollo(url: str) -> dict | None:
             break
         except HTTPError as e:
             status_code = response.status_code if response else 'No response code'
-            logger.error(f'HTTP error: {e}', extra={"status_code": status_code, "URL": url})
+            logger.error(f'HTTP error: {e}', extra={"status_code": status_code, "URL": url}) 
             http_attempts += 1
             time.sleep(1)
         except (ConnectionError, Timeout, TooManyRedirects) as e:
@@ -371,7 +371,7 @@ def parse_reviews(apollo_cache: dict) -> Dict[str, Dict[str, str | int]]:
         for review in reviews_data:
             extracted_review = {
                 "review_id": review["reviewId"],
-                "date_time": datetime.fromisoformat(
+                "date_time": datetime.fromisoformat( 
                     review["reviewDateTime"].replace("T", " ")
                 ),
                 "rating_overall": review["ratingOverall"],
@@ -444,7 +444,7 @@ def parse_reviews(apollo_cache: dict) -> Dict[str, Dict[str, str | int]]:
     return reviews
 
 
-async def scrape_data(
+def scrape_data(
     url: str, max_pages: Optional[int] = None
 ) -> Tuple[Dict[str, int | float], Dict[str, Dict[str, str | int]]] | None:
     """
@@ -460,7 +460,7 @@ async def scrape_data(
     """
     logger.info(f"Scraping reviews from {url}")
 
-    total_pages = max_pages if max_pages else 20  
+    total_pages = max_pages if max_pages else 20 ############################### CHECK THIS ########################################## 
     overview = {}
     reviews = {}
     overview_parsed = False
@@ -489,7 +489,7 @@ async def scrape_data(
         reviews.update(new_reviews)
 
         # Add a delay
-        await asyncio.sleep(1)
+        time.sleep(1)
 
     if not reviews:
         return {}, {}  # Return empty dicts if no reviews were scraped
@@ -512,12 +512,11 @@ async def scrape_data(
 if __name__ == "__main__":
 
     # test script
-    overview, reviews = asyncio.run(
-        scrape_data(
-            Url.reviews("Google", "9079"),   #   "NVIDIA", "7633", "Meta", "40772", 
-            max_pages=2,
-        )
+    overview, reviews = scrape_data(
+        Url.reviews("Google", "9079"),   #   "NVIDIA", "7633", "Meta", "40772", 
+        max_pages=2,
     )
+
     # print("\n\n")
     # print("Overview:", overview)
     # print("\n\n")

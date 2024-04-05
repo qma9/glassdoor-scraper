@@ -26,10 +26,12 @@ pyproject.toml
 # Scrap code
 **/scrap.py
 **/multi.py
+**/**_old.py
 
 # TODO list
 todo.md
 
 # Database output
 output/
-
+**/query_db.py
+**/query_db*.py
