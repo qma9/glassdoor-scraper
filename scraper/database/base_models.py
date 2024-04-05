@@ -29,22 +29,22 @@ class CompanyBase(BaseModel):
         business_outlook_rating (Optional[float]): The rating for business outlook.
     """
 
-    id: Optional[int] = None  # not required for new instances of CompanyBase
+    # id: Optional[int] = None  # not required for new instances of CompanyBase
     employer_id: int
-    employer_name: str
+    employer_name: Optional[str] = ""
     gvkey: Optional[int] = None
     is_gvkey: Optional[bool] = False
     id_not_found: Optional[bool] = False
-    url_old: Optional[str] = None
-    url_new: Optional[str] = None
-    ticker: Optional[str] = None
-    query: Optional[str] = None
+    url_old: Optional[str] = ""
+    url_new: Optional[str] = ""
+    ticker: Optional[str] = ""
+    query: Optional[str] = ""
 
     number_of_pages: Optional[int] = None
     all_reviews_count: Optional[int] = None
     rated_reviews_count: Optional[int] = None
     overall_rating: Optional[float] = None
-    ceo_name: Optional[str] = None
+    ceo_name: Optional[str] = ""
     ceo_rating: Optional[float] = None
 
     recommend_to_friend_rating: Optional[float] = None
@@ -98,33 +98,33 @@ class ReviewBase(BaseModel):
         review_text (str): Returns the concatenated text of pros, cons, summary, and advice.
     """
 
-    id: int
-    review_id: int
-    employer_id: int
+    id: Optional[int] = None  # not required for new instances of ReviewBase
+    review_id: int 
+    employer_id: Optional[int] = None
     date_time: datetime
 
-    rating_overall: Optional[int] = None
-    rating_ceo: Optional[str] = None
-    rating_business_outlook: Optional[str] = None
-    rating_work_life_balance: Optional[int] = None
-    rating_culture_and_values: Optional[int] = None
-    rating_diversity_and_inclusion: Optional[int] = None
-    rating_senior_leadership: Optional[int] = None
-    rating_recommend_to_friend: Optional[str] = None
-    rating_career_opportunities: Optional[int] = None
-    rating_compensation_and_benefits: Optional[int] = None
+    rating_overall: Optional[float] = None
+    rating_ceo: Optional[str] = ""
+    rating_business_outlook: Optional[str] = ""
+    rating_work_life_balance: Optional[float] = None
+    rating_culture_and_values: Optional[float] = None
+    rating_diversity_and_inclusion: Optional[float] = None
+    rating_senior_leadership: Optional[float] = None
+    rating_recommend_to_friend: Optional[str] = ""
+    rating_career_opportunities: Optional[float] = None
+    rating_compensation_and_benefits: Optional[float] = None
 
     is_current_job: Optional[bool] = None
-    length_of_employment: Optional[int] = None
-    employment_status: Optional[str] = None
+    length_of_employment: Optional[float] = None
+    employment_status: Optional[str] = ""
     job_ending_year: Optional[int] = None
-    job_title: Optional[str] = None
-    location: Optional[str] = None
+    job_title: Optional[str] = ""
+    location: Optional[str] = ""
 
-    pros: Optional[str] = None
-    cons: Optional[str] = None
-    summary: Optional[str] = None
-    advice: Optional[str] = None
+    pros: Optional[str] = ""
+    cons: Optional[str] = ""
+    summary: Optional[str] = ""
+    advice: Optional[str] = ""
 
     count_helpful: Optional[int] = None
     count_not_helpful: Optional[int] = None

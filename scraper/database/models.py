@@ -59,8 +59,8 @@ class Company(Base):
 
     __tablename__ = "company"
 
-    id = Column(Integer, primary_key=True, index=True)
-    employer_id = Column(Integer, unique=True, index=True)
+    # id = Column(Integer, primary_key=True, index=True)
+    employer_id = Column(Integer, primary_key=True, index=True)
     employer_name = Column(String, index=True)
     gvkey = Column(Integer, unique=True, index=True, nullable=True)
     is_gvkey = Column(Boolean, index=True)
@@ -129,26 +129,26 @@ class Review(Base):
     """
     __tablename__ = "review"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True) 
     review_id = Column(Integer, index=True)
     employer_id = Column(Integer, ForeignKey("company.employer_id"), index=True)
     date_time = Column(DateTime, index=True)
     
     review_text = Column(String, index=True)
 
-    rating_overall = Column(Integer, index=True, nullable=True)
+    rating_overall = Column(Float, index=True, nullable=True)
     rating_ceo = Column(String, index=True, nullable=True)
     rating_business_outlook = Column(String, index=True, nullable=True)
-    rating_work_life_balance = Column(Integer, index=True, nullable=True)
-    rating_culture_and_values = Column(Integer, index=True, nullable=True)
-    rating_diversity_and_inclusion = Column(Integer, index=True, nullable=True)
-    rating_senior_leadership = Column(Integer, index=True, nullable=True)
+    rating_work_life_balance = Column(Float, index=True, nullable=True)
+    rating_culture_and_values = Column(Float, index=True, nullable=True)
+    rating_diversity_and_inclusion = Column(Float, index=True, nullable=True)
+    rating_senior_leadership = Column(Float, index=True, nullable=True)
     rating_recommend_to_friend = Column(String, index=True, nullable=True)
-    rating_career_opportunities = Column(Integer, index=True, nullable=True)
-    rating_compensation_and_benefits = Column(Integer, index=True, nullable=True)
+    rating_career_opportunities = Column(Float, index=True, nullable=True)
+    rating_compensation_and_benefits = Column(Float, index=True, nullable=True)
 
     is_current_job = Column(Boolean, index=True, nullable=True)
-    length_of_employment = Column(Integer, index=True, nullable=True)
+    length_of_employment = Column(Float, index=True, nullable=True)
     employment_status = Column(String, index=True, nullable=True)
     job_ending_year = Column(Integer, index=True, nullable=True)
     job_title = Column(String, index=True, nullable=True)
