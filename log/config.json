@@ -23,26 +23,29 @@
   "handlers": {
     "stderr": {
       "class": "logging.StreamHandler",
-      "level": "WARNING",
+      "level": "ERROR",
       "formatter": "simple",
       "stream": "ext://sys.stderr"
     },
     "file_json": {
       "class": "logging.handlers.RotatingFileHandler",
-      "level": "ERROR",
+      "level": "INFO",
       "formatter": "json",
       "filename": "log.jsonl",
       "maxBytes": 104857600,
       "backupCount": 3
     },
     "queue_handler": {
-      "class": "logging.handlers.QueueHandler"
+      "class": "logging.handlers.QueueHandler",
+      "level": "DEBUG",
+      "formatter": "simple",
+      "queue": "queue_placeholder"
     }
   },
   "loggers": {
     "root": {
       "level": "WARNING",
-      "handlers": ["queue_handler", "stderr", "file_json"]
+      "handlers": ["stderr", "file_json"]
     }
   }
 }

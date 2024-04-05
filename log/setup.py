@@ -1,7 +1,10 @@
-import atexit
+from multiprocessing import Queue
+from typing import Tuple
+from threading import Thread
 import json
-import logging.config
-import logging.handlers
+from logging.config import dictConfig
+from logging.handlers import QueueHandler, QueueListener
+import logging
 import pathlib
 import queue
 import sys
@@ -11,8 +14,24 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 logger = logging.getLogger(__name__)
 
+def logger_thread(q: queue.Queue) -> None:
+    while True:
+        record = q.get()
+        if record is None:
+            break
+        logger = logging.getLogger(record.name)
+        logger.handle(record)
 
-def setup_logging():
+m_queue = None
+
+def get_queue() -> Queue:
+    global m_queue
+    if m_queue is None:
+        m_queue = Queue()
+    return m_queue
+
+
+def setup_logging() -> Tuple[QueueListener, Thread]: 
     config_file = pathlib.Path(__file__).parent / "config.json"
     with open(config_file) as f_in:
         config = json.load(f_in)
@@ -23,29 +42,26 @@ def setup_logging():
     )
 
     log_queue = queue.Queue(-1)  # Create a Queue
-    config["handlers"]["queue_handler"][
-        "queue"
-    ] = log_queue  # Add the Queue to the queue_handler configuration
+    config["handlers"]["queue_handler"]["queue"] = log_queue  # Add the Queue to the queue_handler configuration
 
-    logging.config.dictConfig(config)
+    dictConfig(config)
 
-    # Get the handlers from the root logger
+    # Create the QueueHandler directly
+    queue_handler = QueueHandler(log_queue)
+
+    # Get the root logger and set its handlers to the QueueHandler
     root_logger = logging.getLogger()
-    handlers = root_logger.handlers
-
-    # Replace the handlers in the root logger with the QueueHandler
-    queue_handler = [
-        handler
-        for handler in handlers
-        if isinstance(handler, logging.handlers.QueueHandler)
-    ][0]
     root_logger.handlers = [queue_handler]
 
-    # Create a QueueListener with the handlers
-    listener = logging.handlers.QueueListener(log_queue, *handlers)
+    # Create a QueueListener with the new QueueHandler
+    listener = QueueListener(log_queue, queue_handler)
     listener.start()
 
-    return listener
+    # Start the logger thread
+    lt = Thread(target=logger_thread, args=(log_queue,))
+    lt.start()
+
+    return listener, lt
 
 
 def main():
