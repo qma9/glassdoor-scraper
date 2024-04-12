@@ -5,7 +5,7 @@ import os
 import sys
 
 # Append the path to the sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 load_dotenv()  # Load .env file
 
 from database import engine, Company, get_db

@@ -11,7 +11,6 @@ from datetime import datetime
 import urllib3
 import json
 import re
-import asyncio
 from dotenv import load_dotenv
 import sys
 import os
@@ -460,7 +459,7 @@ def scrape_data(
     """
     logger.info(f"Scraping reviews from {url}")
 
-    total_pages = max_pages if max_pages else 20 ############################### CHECK THIS ########################################## 
+    total_pages = max_pages if max_pages else 20 
     overview = {}
     reviews = {}
     overview_parsed = False

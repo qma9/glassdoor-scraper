@@ -27,6 +27,8 @@ pyproject.toml
 **/scrap.py
 **/multi.py
 **/**_old.py
+**/count_reviews.py
+**/add_old_test_reviews.py
 
 # TODO list
 todo.md

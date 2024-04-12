@@ -1,6 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.engine import Row
+from sqlalchemy import or_
 from pydantic import ValidationError
 
 from multiprocessing import Pool, cpu_count
@@ -28,20 +29,22 @@ def get_all_urls(session: Session) -> List[Row]:
         ticker_to_ids = {
             'MSFT': 1651, 
             'AAPL': 1138, 
-            # 'INTC': 1519, 
-            # 'NVDA': 7633, 
-            # 'MU': 1648, 
+            'INTC': 1519, 
+            'NVDA': 7633, 
+            'MU': 1648, 
             'META': 40772, 
-            # 'AMD': 15
+            'AMD': 15,
+            'GOOG': 9079,
+            'PLTR': 236375,
         }
         return (
-            session.query(Company.url_new)
-            .filter(Company.is_gvkey == 1,           # Edit filter for user needs
-                    Company.url_new.isnot(None), 
-                    Company.ticker.isnot(None),
-                    Company.employer_id.in_(ticker_to_ids.values())  # Remove for production 
-            )
-            .all()
+                session.query(Company.url_new)
+                .filter(
+                    Company.url_new.isnot(None),   # Modify query for use case
+                    or_(Company.is_gvkey == 1, Company.ticker.isnot(None)),
+                    Company.employer_id.in_(ticker_to_ids.values())        ################ Remove for production ################
+                )
+                .all()
         )
 
 
@@ -58,7 +61,7 @@ def scrape_and_store(urls: List[Row]) -> None:
     with get_db() as session:
         for url in urls:
             try:
-                overview_data, reviews_data = scrape_data(url.url_new, max_pages=50) 
+                overview_data, reviews_data = scrape_data(url.url_new, max_pages=600)  ################ Modify for production ################
 
                 ########## Debug print statement ##########
                 # print(f"Scraped data for {url}")
