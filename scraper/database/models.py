@@ -19,7 +19,6 @@ class Company(Base):
     Represents a company in the database.
 
     Attributes:
-        id (int): The unique identifier of the company.
         employer_id (int): The unique identifier of the employer.
         employer_name (str): The name of the employer.
         gvkey (int): The unique identifier of the company in the Global
@@ -59,7 +58,6 @@ class Company(Base):
 
     __tablename__ = "company"
 
-    # id = Column(Integer, primary_key=True, index=True)
     employer_id = Column(Integer, primary_key=True, index=True)
     employer_name = Column(String, index=True)
     gvkey = Column(Integer, unique=True, index=True, nullable=True)

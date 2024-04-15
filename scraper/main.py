@@ -93,6 +93,9 @@ def scrape_and_store(urls: List[Row]) -> None:
 
                 # Update the company's fields with the new data
                 for key, value in valid_data.model_dump().items():
+                    # Skip updating employer_name if it's not in valid_data or if it's None
+                    if key == 'employer_name' and (key not in valid_data.__dict__ or valid_data.__dict__[key] is None):
+                        continue
 
                     if key in valid_data.__dict__:
 

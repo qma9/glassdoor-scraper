@@ -31,7 +31,7 @@ class CompanyBase(BaseModel):
 
     # id: Optional[int] = None  # not required for new instances of CompanyBase
     employer_id: int
-    employer_name: Optional[str] = ""
+    employer_name: str
     gvkey: Optional[int] = None
     is_gvkey: Optional[bool] = False
     id_not_found: Optional[bool] = False
